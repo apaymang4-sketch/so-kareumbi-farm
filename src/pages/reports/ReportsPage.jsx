@@ -29,10 +29,18 @@ function ReportsPage({ initialReport = "stok_gudang" }) {
   const isEggReport =
     selectedReport === "telur_bagus" || selectedReport === "telur_reject";
 
+  const reportRows = useMemo(() => {
+    if (selectedReport === "ayam_hidup_rekap") {
+      return groupAyamHidupRekap(rows);
+    }
+
+    return rows;
+  }, [rows, selectedReport]);
+
   const filteredRows = useMemo(() => {
     const keyword = search.toLowerCase();
 
-    return rows.filter((row) => {
+    return reportRows.filter((row) => {
       const matchReport = matchReportType(row, selectedReport);
 
       const matchSearch =
@@ -43,7 +51,7 @@ function ReportsPage({ initialReport = "stok_gudang" }) {
 
       return matchReport && matchSearch;
     });
-  }, [rows, selectedReport, search]);
+  }, [reportRows, selectedReport, search]);
 
   function exportExcel() {
     if (filteredRows.length === 0) {
@@ -56,9 +64,9 @@ function ReportsPage({ initialReport = "stok_gudang" }) {
         Sesi: row.sessionName || "",
         Lokasi: row.locationName || "",
         UsiaAyamMinggu: row.ageWeeks || "",
-        Lorong: row.lorong || "",
-        Baris: row.baris || "",
-        Sekat: row.sekat || "",
+        Lorong: selectedReport === "ayam_hidup_detail" ? row.lorong || "" : "",
+        Baris: selectedReport === "ayam_hidup_detail" ? row.baris || "" : "",
+        Sekat: selectedReport === "ayam_hidup_detail" ? row.sekat || "" : "",
         Item: row.itemName || "",
         Satuan: row.unit || "",
         Sistem: Number(row.systemQty || 0),
@@ -77,6 +85,10 @@ function ReportsPage({ initialReport = "stok_gudang" }) {
         base.Ikat = Number(row.eggIkat || 0);
         base.Tray = Number(row.eggTray || 0);
         base.Peti = Number(row.eggPeti || 0);
+      }
+
+      if (selectedReport === "ayam_hidup_rekap") {
+        base.JumlahSekatDiinput = row.children?.length || 0;
       }
 
       return {
@@ -143,6 +155,8 @@ function ReportsPage({ initialReport = "stok_gudang" }) {
               <th>Selisih</th>
               <th>Koreksi Admin</th>
               <th>Final</th>
+
+              {selectedReport === "ayam_hidup_rekap" && <th>Sekat Diinput</th>}
 
               {isEggReport && (
                 <>
@@ -215,6 +229,10 @@ function ReportsPage({ initialReport = "stok_gudang" }) {
                       <strong>{formatNumber(getFinalQty(row))}</strong>
                     </td>
 
+                    {selectedReport === "ayam_hidup_rekap" && (
+                      <td>{row.children?.length || 0}</td>
+                    )}
+
                     {isEggReport && (
                       <>
                         <td>{formatNumber(row.weightKg || row.countedQty || 0)}</td>
@@ -241,6 +259,45 @@ function ReportsPage({ initialReport = "stok_gudang" }) {
       </div>
     </div>
   );
+}
+
+function groupAyamHidupRekap(rows) {
+  const groups = new Map();
+
+  rows
+    .filter((row) => row.type === "ayam_hidup")
+    .forEach((row) => {
+      const key = [
+        row.assignmentId || "",
+        row.sessionId || "",
+        row.locationId || "",
+        row.countedBy || "",
+      ].join("__");
+
+      if (!groups.has(key)) {
+        groups.set(key, {
+          ...row,
+          id: `ayam_hidup_rekap_${key}`,
+          isGroup: true,
+          itemName: "Ayam Hidup",
+          unit: "Ekor",
+          systemQty: 0,
+          countedQty: 0,
+          correctedQty: "",
+          finalQty: 0,
+          children: [],
+        });
+      }
+
+      const group = groups.get(key);
+      group.children.push(row);
+      group.countedQty += Number(row.countedQty || 0);
+      group.finalQty += getFinalQty(row);
+      group.countedAt = getLatestDate(group.countedAt, row.countedAt);
+      group.status = mergeStatus(group.children);
+    });
+
+  return Array.from(groups.values());
 }
 
 function matchReportType(row, reportType) {
@@ -277,23 +334,19 @@ function matchReportType(row, reportType) {
   if (reportType === "telur_bagus") {
     return (
       type === "telur" &&
-      (
-        itemName.includes("bagus") ||
+      (itemName.includes("bagus") ||
         itemName.includes("utuh") ||
-        itemName.includes("normal")
-      )
+        itemName.includes("normal"))
     );
   }
 
   if (reportType === "telur_reject") {
     return (
       type === "telur" &&
-      (
-        itemName.includes("reject") ||
+      (itemName.includes("reject") ||
         itemName.includes("rejek") ||
         itemName.includes("retak") ||
-        itemName.includes("pecah")
-      )
+        itemName.includes("pecah"))
     );
   }
 
@@ -325,7 +378,15 @@ function isChickenReport(reportType) {
 }
 
 function getFinalQty(row) {
-  if (row.status === "dikoreksi" && row.correctedQty !== "" && row.correctedQty != null) {
+  if (row.isGroup) {
+    return Number(row.finalQty || row.countedQty || 0);
+  }
+
+  if (
+    row.status === "dikoreksi" &&
+    row.correctedQty !== "" &&
+    row.correctedQty != null
+  ) {
     return Number(row.correctedQty || 0);
   }
 
@@ -334,6 +395,33 @@ function getFinalQty(row) {
 
 function getDifference(row) {
   return getFinalQty(row) - Number(row.systemQty || 0);
+}
+
+function mergeStatus(items) {
+  if (items.some((item) => item.status === "perlu_hitung_ulang")) {
+    return "perlu_hitung_ulang";
+  }
+
+  if (items.some((item) => item.status === "menunggu_review")) {
+    return "menunggu_review";
+  }
+
+  if (items.some((item) => item.status === "dikoreksi")) {
+    return "dikoreksi";
+  }
+
+  if (items.every((item) => item.status === "disetujui")) {
+    return "disetujui";
+  }
+
+  return items[0]?.status || "menunggu_review";
+}
+
+function getLatestDate(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+
+  return new Date(a) > new Date(b) ? a : b;
 }
 
 function getReportTitle(type) {

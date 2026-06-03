@@ -54,10 +54,14 @@ function ReviewPage() {
     return [...new Set(rows.map((item) => item.countedBy).filter(Boolean))];
   }, [rows]);
 
+  const reviewRows = useMemo(() => {
+    return buildReviewRows(rows);
+  }, [rows]);
+
   const filteredRows = useMemo(() => {
     const keyword = search.toLowerCase();
 
-    return rows.filter((item) => {
+    return reviewRows.filter((item) => {
       const matchSession =
         selectedSession === "semua" ? true : item.sessionId === selectedSession;
 
@@ -75,10 +79,16 @@ function ReviewPage() {
 
       return matchSession && matchPetugas && matchType && matchSearch;
     });
-  }, [rows, selectedSession, selectedPetugas, selectedType, search]);
+  }, [reviewRows, selectedSession, selectedPetugas, selectedType, search]);
 
   function getFinalQty(item) {
-    if (item.status === "dikoreksi" && item.correctedQty !== "" && item.correctedQty != null) {
+    if (item.isGroup) return Number(item.finalQty || 0);
+
+    if (
+      item.status === "dikoreksi" &&
+      item.correctedQty !== "" &&
+      item.correctedQty != null
+    ) {
       return Number(item.correctedQty || 0);
     }
 
@@ -90,12 +100,25 @@ function ReviewPage() {
     if (!ok) return;
 
     try {
-      await updateStockCount(item.id, {
-        ...item,
-        status: "disetujui",
-        reviewedBy: "Admin",
-        reviewedAt: new Date().toISOString(),
-      });
+      if (item.isGroup && item.children?.length) {
+        await Promise.all(
+          item.children.map((child) =>
+            updateStockCount(child.id, {
+              ...child,
+              status: "disetujui",
+              reviewedBy: "Admin",
+              reviewedAt: new Date().toISOString(),
+            })
+          )
+        );
+      } else {
+        await updateStockCount(item.id, {
+          ...item,
+          status: "disetujui",
+          reviewedBy: "Admin",
+          reviewedAt: new Date().toISOString(),
+        });
+      }
 
       await loadRows();
       setDetailRow(null);
@@ -110,12 +133,25 @@ function ReviewPage() {
     if (!ok) return;
 
     try {
-      await updateStockCount(item.id, {
-        ...item,
-        status: "perlu_hitung_ulang",
-        reviewedBy: "Admin",
-        reviewedAt: new Date().toISOString(),
-      });
+      if (item.isGroup && item.children?.length) {
+        await Promise.all(
+          item.children.map((child) =>
+            updateStockCount(child.id, {
+              ...child,
+              status: "perlu_hitung_ulang",
+              reviewedBy: "Admin",
+              reviewedAt: new Date().toISOString(),
+            })
+          )
+        );
+      } else {
+        await updateStockCount(item.id, {
+          ...item,
+          status: "perlu_hitung_ulang",
+          reviewedBy: "Admin",
+          reviewedAt: new Date().toISOString(),
+        });
+      }
 
       await loadRows();
       setDetailRow(null);
@@ -126,6 +162,11 @@ function ReviewPage() {
   }
 
   function openCorrection(item) {
+    if (item.isGroup) {
+      alert("Koreksi ayam hidup dilakukan dari data detail per sekat, bukan total kandang.");
+      return;
+    }
+
     setCorrection({
       id: item.id,
       correctedQty: item.correctedQty || item.countedQty,
@@ -308,7 +349,9 @@ function ReviewPage() {
                     </td>
 
                     <td>
-                      {item.correctedQty === "" || item.correctedQty == null
+                      {item.isGroup
+                        ? "-"
+                        : item.correctedQty === "" || item.correctedQty == null
                         ? "-"
                         : `${formatNumber(item.correctedQty)} ${item.unit}`}
                     </td>
@@ -365,98 +408,102 @@ function ReviewPage() {
               </div>
             </div>
 
-            <table className="data-table detail-table">
-              <tbody>
-                <tr>
-                  <th>Lokasi</th>
-                  <td>{detailRow.locationName || "-"}</td>
-                </tr>
+            {detailRow.isGroup ? (
+              <AyamHidupGroupDetail row={detailRow} />
+            ) : (
+              <table className="data-table detail-table">
+                <tbody>
+                  <tr>
+                    <th>Lokasi</th>
+                    <td>{detailRow.locationName || "-"}</td>
+                  </tr>
 
-                <tr>
-                  <th>Item</th>
-                  <td>{detailRow.itemName || "-"}</td>
-                </tr>
+                  <tr>
+                    <th>Item</th>
+                    <td>{detailRow.itemName || "-"}</td>
+                  </tr>
 
-                <tr>
-                  <th>Stok Sistem</th>
-                  <td>
-                    {formatNumber(detailRow.systemQty)} {detailRow.unit}
-                  </td>
-                </tr>
+                  <tr>
+                    <th>Stok Sistem</th>
+                    <td>
+                      {formatNumber(detailRow.systemQty)} {detailRow.unit}
+                    </td>
+                  </tr>
 
-                <tr>
-                  <th>Hasil Petugas</th>
-                  <td>
-                    {formatNumber(detailRow.countedQty)} {detailRow.unit}
-                  </td>
-                </tr>
+                  <tr>
+                    <th>Hasil Petugas</th>
+                    <td>
+                      {formatNumber(detailRow.countedQty)} {detailRow.unit}
+                    </td>
+                  </tr>
 
-                {detailRow.type === "telur" && (
-  <>
-    <tr>
-      <th>Kg Timbang</th>
-      <td>{formatNumber(detailRow.weightKg)} Kg</td>
-    </tr>
+                  {detailRow.type === "telur" && (
+                    <>
+                      <tr>
+                        <th>Kg Timbang</th>
+                        <td>{formatNumber(detailRow.weightKg)} Kg</td>
+                      </tr>
 
-    <tr>
-      <th>Jumlah Butir</th>
-      <td>{formatNumber(detailRow.eggButir)} Butir</td>
-    </tr>
+                      <tr>
+                        <th>Jumlah Butir</th>
+                        <td>{formatNumber(detailRow.eggButir)} Butir</td>
+                      </tr>
 
-    <tr>
-      <th>Jumlah Ikat</th>
-      <td>{formatNumber(detailRow.eggIkat)} Ikat</td>
-    </tr>
+                      <tr>
+                        <th>Jumlah Ikat</th>
+                        <td>{formatNumber(detailRow.eggIkat)} Ikat</td>
+                      </tr>
 
-    <tr>
-      <th>Jumlah Tray</th>
-      <td>{formatNumber(detailRow.eggTray)} Tray</td>
-    </tr>
+                      <tr>
+                        <th>Jumlah Tray</th>
+                        <td>{formatNumber(detailRow.eggTray)} Tray</td>
+                      </tr>
 
-    <tr>
-      <th>Jumlah Peti</th>
-      <td>{formatNumber(detailRow.eggPeti)} Peti</td>
-    </tr>
-  </>
-)}
+                      <tr>
+                        <th>Jumlah Peti</th>
+                        <td>{formatNumber(detailRow.eggPeti)} Peti</td>
+                      </tr>
+                    </>
+                  )}
 
-                <tr>
-                  <th>Selisih</th>
-                  <td>
-                    {formatNumber(getFinalQty(detailRow) - Number(detailRow.systemQty || 0))}{" "}
-                    {detailRow.unit}
-                  </td>
-                </tr>
+                  <tr>
+                    <th>Selisih</th>
+                    <td>
+                      {formatNumber(getFinalQty(detailRow) - Number(detailRow.systemQty || 0))}{" "}
+                      {detailRow.unit}
+                    </td>
+                  </tr>
 
-                <tr>
-                  <th>Koreksi Admin</th>
-                  <td>
-                    {detailRow.correctedQty === "" || detailRow.correctedQty == null
-                      ? "-"
-                      : `${formatNumber(detailRow.correctedQty)} ${detailRow.unit}`}
-                  </td>
-                </tr>
+                  <tr>
+                    <th>Koreksi Admin</th>
+                    <td>
+                      {detailRow.correctedQty === "" || detailRow.correctedQty == null
+                        ? "-"
+                        : `${formatNumber(detailRow.correctedQty)} ${detailRow.unit}`}
+                    </td>
+                  </tr>
 
-                <tr>
-                  <th>Final</th>
-                  <td>
-                    <strong>
-                      {formatNumber(getFinalQty(detailRow))} {detailRow.unit}
-                    </strong>
-                  </td>
-                </tr>
+                  <tr>
+                    <th>Final</th>
+                    <td>
+                      <strong>
+                        {formatNumber(getFinalQty(detailRow))} {detailRow.unit}
+                      </strong>
+                    </td>
+                  </tr>
 
-                <tr>
-                  <th>Status</th>
-                  <td>{labelStatus(detailRow.status)}</td>
-                </tr>
+                  <tr>
+                    <th>Status</th>
+                    <td>{labelStatus(detailRow.status)}</td>
+                  </tr>
 
-                <tr>
-                  <th>Alasan Koreksi</th>
-                  <td>{detailRow.correctionReason || "-"}</td>
-                </tr>
-              </tbody>
-            </table>
+                  <tr>
+                    <th>Alasan Koreksi</th>
+                    <td>{detailRow.correctionReason || "-"}</td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
 
             <div className="detail-actions">
               <button className="table-button success" onClick={() => approveRow(detailRow)}>
@@ -467,9 +514,11 @@ function ReviewPage() {
                 Hitung Ulang
               </button>
 
-              <button className="table-button" onClick={() => openCorrection(detailRow)}>
-                Koreksi
-              </button>
+              {!detailRow.isGroup && (
+                <button className="table-button" onClick={() => openCorrection(detailRow)}>
+                  Koreksi
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -550,6 +599,190 @@ function ReviewPage() {
       )}
     </div>
   );
+}
+
+function AyamHidupGroupDetail({ row }) {
+  const lorongGroups = groupByLorong(row.children || []);
+
+  return (
+    <div>
+      <table className="data-table detail-table">
+        <tbody>
+          <tr>
+            <th>Lokasi</th>
+            <td>{row.locationName || "-"}</td>
+          </tr>
+          <tr>
+            <th>Item</th>
+            <td>Ayam Hidup</td>
+          </tr>
+          <tr>
+            <th>Total Kandang</th>
+            <td>
+              <strong>
+                {formatNumber(row.countedQty)} {row.unit}
+              </strong>
+            </td>
+          </tr>
+          <tr>
+            <th>Jumlah Sekat Diinput</th>
+            <td>{row.children?.length || 0} sekat</td>
+          </tr>
+          <tr>
+            <th>Status</th>
+            <td>{labelStatus(row.status)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      {lorongGroups.map((lorong) => (
+        <div className="table-card" key={lorong.lorong} style={{ marginTop: 16 }}>
+          <h3>
+            Lorong {lorong.lorong}: {formatNumber(lorong.total)} Ekor
+          </h3>
+
+          <table className="data-table compact-table">
+            <thead>
+              <tr>
+                <th>Baris</th>
+                <th>Sekat</th>
+                <th>Jumlah</th>
+                <th>Petugas</th>
+                <th>Waktu</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {lorong.items.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.baris || "-"}</td>
+                  <td>{item.sekat || "-"}</td>
+                  <td>
+                    <strong>{formatNumber(item.countedQty)} Ekor</strong>
+                  </td>
+                  <td>{item.countedBy || "-"}</td>
+                  <td>{formatDateTime(item.countedAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function buildReviewRows(rows) {
+  const result = [];
+  const ayamGroups = new Map();
+
+  rows.forEach((item) => {
+    if (item.type !== "ayam_hidup") {
+      result.push(item);
+      return;
+    }
+
+    const key = [
+      item.assignmentId || "",
+      item.sessionId || "",
+      item.locationId || "",
+      item.countedBy || "",
+    ].join("__");
+
+    if (!ayamGroups.has(key)) {
+      ayamGroups.set(key, {
+        ...item,
+        id: `ayam_hidup_group_${key}`,
+        isGroup: true,
+        itemName: "Ayam Hidup",
+        unit: "Ekor",
+        systemQty: 0,
+        countedQty: 0,
+        correctedQty: "",
+        finalQty: 0,
+        children: [],
+      });
+    }
+
+    const group = ayamGroups.get(key);
+    group.children.push(item);
+    group.countedQty += Number(item.countedQty || 0);
+    group.finalQty += getChildFinalQty(item);
+    group.countedAt = getLatestDate(group.countedAt, item.countedAt);
+    group.status = mergeStatus(group.children);
+  });
+
+  return [...result, ...Array.from(ayamGroups.values())];
+}
+
+function groupByLorong(items) {
+  const map = new Map();
+
+  items.forEach((item) => {
+    const lorong = Number(item.lorong || 0);
+
+    if (!map.has(lorong)) {
+      map.set(lorong, {
+        lorong,
+        total: 0,
+        items: [],
+      });
+    }
+
+    const group = map.get(lorong);
+    group.items.push(item);
+    group.total += getChildFinalQty(item);
+  });
+
+  return Array.from(map.values())
+    .sort((a, b) => a.lorong - b.lorong)
+    .map((group) => ({
+      ...group,
+      items: group.items.sort(
+        (a, b) =>
+          Number(a.baris || 0) - Number(b.baris || 0) ||
+          Number(a.sekat || 0) - Number(b.sekat || 0)
+      ),
+    }));
+}
+
+function getChildFinalQty(item) {
+  if (
+    item.status === "dikoreksi" &&
+    item.correctedQty !== "" &&
+    item.correctedQty != null
+  ) {
+    return Number(item.correctedQty || 0);
+  }
+
+  return Number(item.countedQty || 0);
+}
+
+function mergeStatus(items) {
+  if (items.some((item) => item.status === "perlu_hitung_ulang")) {
+    return "perlu_hitung_ulang";
+  }
+
+  if (items.some((item) => item.status === "menunggu_review")) {
+    return "menunggu_review";
+  }
+
+  if (items.some((item) => item.status === "dikoreksi")) {
+    return "dikoreksi";
+  }
+
+  if (items.every((item) => item.status === "disetujui")) {
+    return "disetujui";
+  }
+
+  return items[0]?.status || "menunggu_review";
+}
+
+function getLatestDate(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+
+  return new Date(a) > new Date(b) ? a : b;
 }
 
 function labelType(type) {
