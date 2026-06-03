@@ -34,6 +34,14 @@ function DashboardPage() {
   const summary = useMemo(() => {
     const totalAssignments = assignments.length;
     const selesai = assignments.filter((item) => item.status === "selesai").length;
+
+    const activeSessions = new Set(
+      assignments
+        .filter((item) => item.sessionStatus === "draft" || item.sessionStatus === "berjalan")
+        .map((item) => item.sessionId)
+        .filter(Boolean)
+    );
+
     const progress =
       totalAssignments === 0 ? 0 : Math.round((selesai / totalAssignments) * 100);
 
@@ -43,31 +51,34 @@ function DashboardPage() {
       (item) => item.status === "perlu_hitung_ulang"
     ).length;
 
-    const selisihGudang = counts
-      .filter((item) => item.type === "gudang")
-      .reduce((sum, item) => sum + getDifference(item), 0);
+    const totalSelisihSemuaLokasi = counts.reduce(
+      (sum, item) => sum + getDifference(item),
+      0
+    );
 
     const totalAyamHidup = counts
       .filter((item) => item.type === "ayam_hidup")
       .reduce((sum, item) => sum + getFinalQty(item), 0);
 
-    const totalTelurBagus = counts
-      .filter(
-        (item) =>
-          item.type === "telur" &&
-          String(item.itemName || "").toLowerCase().includes("bagus")
-      )
+    const totalTelurBagusKg = counts
+      .filter((item) => isTelurBagus(item))
       .reduce((sum, item) => sum + getFinalQty(item), 0);
+
+    const totalTelurBagusButir = counts
+      .filter((item) => isTelurBagus(item))
+      .reduce((sum, item) => sum + Number(item.eggButir || 0), 0);
 
     return {
       totalAssignments,
       selesai,
+      activeSessionCount: activeSessions.size,
       progress,
       perluReview,
       perluHitungUlang,
-      selisihGudang,
+      totalSelisihSemuaLokasi,
       totalAyamHidup,
-      totalTelurBagus,
+      totalTelurBagusKg,
+      totalTelurBagusButir,
     };
   }, [assignments, counts]);
 
@@ -114,7 +125,7 @@ function DashboardPage() {
       </div>
 
       <div className="dashboard-cards">
-        <DashCard title="Sesi Aktif" value="-" />
+        <DashCard title="Sesi Aktif" value={summary.activeSessionCount} />
         <DashCard title="Progress Opname" value={`${summary.progress}%`} />
         <DashCard
           title="Assignment Selesai"
@@ -122,9 +133,20 @@ function DashboardPage() {
         />
         <DashCard title="Perlu Review" value={summary.perluReview} />
         <DashCard title="Perlu Hitung Ulang" value={summary.perluHitungUlang} />
-        <DashCard title="Selisih Gudang" value={`${formatNumber(summary.selisihGudang)} Kg`} />
-        <DashCard title="Total Ayam Hidup" value={`${formatNumber(summary.totalAyamHidup)} Ekor`} />
-        <DashCard title="Telur Bagus" value={`${formatNumber(summary.totalTelurBagus)} Butir`} />
+        <DashCard
+          title="Selisih Semua Lokasi"
+          value={`${formatNumber(summary.totalSelisihSemuaLokasi)} Kg`}
+        />
+        <DashCard
+          title="Total Ayam Hidup"
+          value={`${formatNumber(summary.totalAyamHidup)} Ekor`}
+        />
+        <DashCard
+          title="Telur Bagus"
+          value={`${formatNumber(summary.totalTelurBagusKg)} Kg / ${formatNumber(
+            summary.totalTelurBagusButir
+          )} Butir`}
+        />
       </div>
 
       <div className="dashboard-two-column">
@@ -242,6 +264,19 @@ function DashCard({ title, value }) {
       <span>{title}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+function isTelurBagus(item) {
+  const itemName = String(item.itemName || "").toLowerCase();
+
+  return (
+    item.type === "telur" &&
+    (
+      itemName.includes("bagus") ||
+      itemName.includes("utuh") ||
+      itemName.includes("normal")
+    )
   );
 }
 

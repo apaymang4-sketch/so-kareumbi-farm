@@ -26,6 +26,9 @@ function ReportsPage({ initialReport = "stok_gudang" }) {
     }
   }
 
+  const isEggReport =
+    selectedReport === "telur_bagus" || selectedReport === "telur_reject";
+
   const filteredRows = useMemo(() => {
     const keyword = search.toLowerCase();
 
@@ -48,25 +51,42 @@ function ReportsPage({ initialReport = "stok_gudang" }) {
       return;
     }
 
-    const exportRows = filteredRows.map((row) => ({
-      Sesi: row.sessionName || "",
-      Lokasi: row.locationName || "",
-      UsiaAyamMinggu: row.ageWeeks || "",
-      Lorong: row.lorong || "",
-      Baris: row.baris || "",
-      Sekat: row.sekat || "",
-      Item: row.itemName || "",
-      Satuan: row.unit || "",
-      Sistem: Number(row.systemQty || 0),
-      HasilSO: Number(row.countedQty || 0),
-      Selisih: getDifference(row),
-      KoreksiAdmin: row.correctedQty === "" || row.correctedQty == null ? "" : Number(row.correctedQty),
-      Final: getFinalQty(row),
-      StatusReview: labelStatus(row.status),
-      Petugas: row.countedBy || "",
-      WaktuInput: formatDateTime(row.countedAt),
-      AlasanKoreksi: row.correctionReason || "",
-    }));
+    const exportRows = filteredRows.map((row) => {
+      const base = {
+        Sesi: row.sessionName || "",
+        Lokasi: row.locationName || "",
+        UsiaAyamMinggu: row.ageWeeks || "",
+        Lorong: row.lorong || "",
+        Baris: row.baris || "",
+        Sekat: row.sekat || "",
+        Item: row.itemName || "",
+        Satuan: row.unit || "",
+        Sistem: Number(row.systemQty || 0),
+        HasilSO: Number(row.countedQty || 0),
+        Selisih: getDifference(row),
+        KoreksiAdmin:
+          row.correctedQty === "" || row.correctedQty == null
+            ? ""
+            : Number(row.correctedQty),
+        Final: getFinalQty(row),
+      };
+
+      if (isEggReport) {
+        base.KgTimbang = Number(row.weightKg || row.countedQty || 0);
+        base.Butir = Number(row.eggButir || 0);
+        base.Ikat = Number(row.eggIkat || 0);
+        base.Tray = Number(row.eggTray || 0);
+        base.Peti = Number(row.eggPeti || 0);
+      }
+
+      return {
+        ...base,
+        StatusReview: labelStatus(row.status),
+        Petugas: row.countedBy || "",
+        WaktuInput: formatDateTime(row.countedAt),
+        AlasanKoreksi: row.correctionReason || "",
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
     const workbook = XLSX.utils.book_new();
@@ -123,6 +143,17 @@ function ReportsPage({ initialReport = "stok_gudang" }) {
               <th>Selisih</th>
               <th>Koreksi Admin</th>
               <th>Final</th>
+
+              {isEggReport && (
+                <>
+                  <th>Kg Timbang</th>
+                  <th>Butir</th>
+                  <th>Ikat</th>
+                  <th>Tray</th>
+                  <th>Peti</th>
+                </>
+              )}
+
               <th>Status</th>
               <th>Petugas</th>
             </tr>
@@ -131,11 +162,11 @@ function ReportsPage({ initialReport = "stok_gudang" }) {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="15">Mengambil data...</td>
+                <td colSpan="20">Mengambil data...</td>
               </tr>
             ) : filteredRows.length === 0 ? (
               <tr>
-                <td colSpan="15">Tidak ada data laporan.</td>
+                <td colSpan="20">Tidak ada data laporan.</td>
               </tr>
             ) : (
               filteredRows.map((row) => {
@@ -150,34 +181,56 @@ function ReportsPage({ initialReport = "stok_gudang" }) {
                       <td>{row.ageWeeks ? `${row.ageWeeks} minggu` : "-"}</td>
                     )}
 
-                    {selectedReport === "ayam_hidup_detail" && <td>{row.lorong || "-"}</td>}
-                    {selectedReport === "ayam_hidup_detail" && <td>{row.baris || "-"}</td>}
-                    {selectedReport === "ayam_hidup_detail" && <td>{row.sekat || "-"}</td>}
+                    {selectedReport === "ayam_hidup_detail" && (
+                      <td>{row.lorong || "-"}</td>
+                    )}
+                    {selectedReport === "ayam_hidup_detail" && (
+                      <td>{row.baris || "-"}</td>
+                    )}
+                    {selectedReport === "ayam_hidup_detail" && (
+                      <td>{row.sekat || "-"}</td>
+                    )}
 
                     <td className="cell-ellipsis" title={row.itemName || ""}>
                       {row.itemName || "-"}
                     </td>
+
                     <td>{row.unit || "-"}</td>
                     <td>{formatNumber(row.systemQty)}</td>
                     <td>{formatNumber(row.countedQty)}</td>
+
                     <td>
                       <span className={difference === 0 ? "badge green" : "badge red"}>
                         {formatNumber(difference)}
                       </span>
                     </td>
+
                     <td>
                       {row.correctedQty === "" || row.correctedQty == null
                         ? "-"
                         : formatNumber(row.correctedQty)}
                     </td>
+
                     <td>
                       <strong>{formatNumber(getFinalQty(row))}</strong>
                     </td>
+
+                    {isEggReport && (
+                      <>
+                        <td>{formatNumber(row.weightKg || row.countedQty || 0)}</td>
+                        <td>{formatNumber(row.eggButir)}</td>
+                        <td>{formatNumber(row.eggIkat)}</td>
+                        <td>{formatNumber(row.eggTray)}</td>
+                        <td>{formatNumber(row.eggPeti)}</td>
+                      </>
+                    )}
+
                     <td>
                       <span className={`badge ${statusBadge(row.status)}`}>
                         {labelStatus(row.status)}
                       </span>
                     </td>
+
                     <td>{row.countedBy || "-"}</td>
                   </tr>
                 );
@@ -199,7 +252,7 @@ function matchReportType(row, reportType) {
   }
 
   if (reportType === "selisih_gudang") {
-    return type === "gudang" && getDifference(row) !== 0;
+    return getDifference(row) !== 0;
   }
 
   if (reportType === "ayam_hidup_rekap") {
@@ -215,19 +268,40 @@ function matchReportType(row, reportType) {
   }
 
   if (reportType === "ayam_upkir") {
-    return type === "ayam_mati_upkir" && itemName.includes("upkir");
+    return (
+      type === "ayam_mati_upkir" &&
+      (itemName.includes("upkir") || itemName.includes("afkir"))
+    );
   }
 
   if (reportType === "telur_bagus") {
-    return type === "telur" && itemName.includes("bagus");
+    return (
+      type === "telur" &&
+      (
+        itemName.includes("bagus") ||
+        itemName.includes("utuh") ||
+        itemName.includes("normal")
+      )
+    );
   }
 
   if (reportType === "telur_reject") {
-    return type === "telur" && itemName.includes("reject");
+    return (
+      type === "telur" &&
+      (
+        itemName.includes("reject") ||
+        itemName.includes("rejek") ||
+        itemName.includes("retak") ||
+        itemName.includes("pecah")
+      )
+    );
   }
 
   if (reportType === "koreksi_admin") {
-    return row.status === "dikoreksi" || row.correctedQty !== "" && row.correctedQty != null;
+    return (
+      row.status === "dikoreksi" ||
+      (row.correctedQty !== "" && row.correctedQty != null)
+    );
   }
 
   if (reportType === "kinerja_petugas") {
@@ -265,7 +339,7 @@ function getDifference(row) {
 function getReportTitle(type) {
   const titles = {
     stok_gudang: "Laporan Stok Gudang",
-    selisih_gudang: "Laporan Selisih Gudang",
+    selisih_gudang: "Laporan Selisih Semua Lokasi",
     ayam_hidup_rekap: "Laporan Ayam Hidup Rekap",
     ayam_hidup_detail: "Laporan Ayam Hidup Detail Sekat",
     ayam_mati: "Laporan Ayam Mati",

@@ -391,6 +391,35 @@ function ReviewPage() {
                   </td>
                 </tr>
 
+                {detailRow.type === "telur" && (
+  <>
+    <tr>
+      <th>Kg Timbang</th>
+      <td>{formatNumber(detailRow.weightKg)} Kg</td>
+    </tr>
+
+    <tr>
+      <th>Jumlah Butir</th>
+      <td>{formatNumber(detailRow.eggButir)} Butir</td>
+    </tr>
+
+    <tr>
+      <th>Jumlah Ikat</th>
+      <td>{formatNumber(detailRow.eggIkat)} Ikat</td>
+    </tr>
+
+    <tr>
+      <th>Jumlah Tray</th>
+      <td>{formatNumber(detailRow.eggTray)} Tray</td>
+    </tr>
+
+    <tr>
+      <th>Jumlah Peti</th>
+      <td>{formatNumber(detailRow.eggPeti)} Peti</td>
+    </tr>
+  </>
+)}
+
                 <tr>
                   <th>Selisih</th>
                   <td>
