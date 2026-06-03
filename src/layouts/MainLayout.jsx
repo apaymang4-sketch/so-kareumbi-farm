@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Grid2X2,
   Database,
@@ -36,6 +36,8 @@ import {
   logoutUser,
   changeCurrentUserPassword,
 } from "../services/authService";
+
+import { getAdminNotifications } from "../services/notificationService";
 
 const pageMenus = {
   master: {
@@ -160,17 +162,35 @@ function MainLayout() {
 
   const [activeTab, setActiveTab] = useState("dashboard");
   const [activeMenuPanel, setActiveMenuPanel] = useState(null);
+
   const [showNotif, setShowNotif] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-const [showPassword, setShowPassword] = useState(false);
-const [newPassword, setNewPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+
+  const [notifCount, setNotifCount] = useState(0);
+  const [notifications, setNotifications] = useState([]);
 
   const currentUser = JSON.parse(localStorage.getItem("so_user")) || {};
 
-  async function handleLogout() 
-  
-  {
+  useEffect(() => {
+    loadNotifications();
+  }, []);
+
+  async function loadNotifications() {
+    try {
+      const data = await getAdminNotifications();
+      setNotifCount(data.count || 0);
+      setNotifications(data.notifications || []);
+    } catch (error) {
+      console.error("Gagal mengambil notifikasi:", error);
+      setNotifCount(0);
+      setNotifications([]);
+    }
+  }
+
+  async function handleLogout() {
     const ok = confirm("Yakin logout?");
     if (!ok) return;
 
@@ -186,22 +206,22 @@ const [newPassword, setNewPassword] = useState("");
 
   async function handleChangePassword(e) {
     e.preventDefault();
-  
+
     if (newPassword.length < 6) {
       alert("Password minimal 6 karakter.");
       return;
     }
-  
+
     try {
       await changeCurrentUserPassword(newPassword);
-  
+
       alert("Password berhasil diganti.");
-  
+
       setNewPassword("");
       setShowPassword(false);
     } catch (error) {
       console.error(error);
-      alert("Gagal ganti password.");
+      alert("Gagal ganti password. Silakan login ulang lalu coba lagi.");
     }
   }
 
@@ -328,9 +348,9 @@ const [newPassword, setNewPassword] = useState("");
 
       <main className="accurate-main">
         <div className="app-topbar">
-        <div className="topbar-left">
-  <h2>Stock Opname KAREUMBI FARM</h2>
-</div>
+          <div className="topbar-left">
+            <h2>Stock Opname KAREUMBI FARM</h2>
+          </div>
 
           <div className="topbar-right">
             <div className="top-action-wrap">
@@ -338,26 +358,47 @@ const [newPassword, setNewPassword] = useState("");
                 type="button"
                 className="notification-box"
                 onClick={() => {
-                  setShowNotif(!showNotif);
+                  const next = !showNotif;
+                  setShowNotif(next);
                   setShowUserMenu(false);
+
+                  if (next) {
+                    loadNotifications();
+                  }
                 }}
               >
                 <Bell size={18} />
-                <span>3</span>
+                {notifCount > 0 && <span>{notifCount}</span>}
               </button>
 
               {showNotif && (
                 <div className="top-dropdown notif-dropdown">
                   <h4>Notifikasi</h4>
 
-                  <div className="dropdown-notif-item">
-                    <strong>SO Masuk</strong>
-                    <p>Petugas input hasil stock opname.</p>
-                  </div>
+                  {notifications.length === 0 ? (
+                    <div className="dropdown-notif-item">
+                      <p>Tidak ada notifikasi baru.</p>
+                    </div>
+                  ) : (
+                    notifications.slice(0, 10).map((item) => (
+                      <div
+                        className="dropdown-notif-item"
+                        key={`${item.type}-${item.id}`}
+                      >
+                        <strong>{item.title}</strong>
+                        <p>{item.message}</p>
+                      </div>
+                    ))
+                  )}
 
                   <div className="dropdown-notif-item">
-                    <strong>Review</strong>
-                    <p>Ada data menunggu review admin.</p>
+                    <button
+                      type="button"
+                      className="table-button"
+                      onClick={loadNotifications}
+                    >
+                      Refresh Notifikasi
+                    </button>
                   </div>
                 </div>
               )}
@@ -383,26 +424,26 @@ const [newPassword, setNewPassword] = useState("");
               {showUserMenu && (
                 <div className="top-dropdown user-dropdown">
                   <button
-  type="button"
-  onClick={() => {
-    setShowProfile(true);
-    setShowUserMenu(false);
-  }}
->
-  <User size={15} />
-  Profile
-</button>
+                    type="button"
+                    onClick={() => {
+                      setShowProfile(true);
+                      setShowUserMenu(false);
+                    }}
+                  >
+                    <User size={15} />
+                    Profile
+                  </button>
 
-<button
-  type="button"
-  onClick={() => {
-    setShowPassword(true);
-    setShowUserMenu(false);
-  }}
->
-  <KeyRound size={15} />
-  Ganti Password
-</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPassword(true);
+                      setShowUserMenu(false);
+                    }}
+                  >
+                    <KeyRound size={15} />
+                    Ganti Password
+                  </button>
 
                   <button
                     type="button"
@@ -446,95 +487,83 @@ const [newPassword, setNewPassword] = useState("");
         <section className="accurate-content">
           <ActiveComponent />
         </section>
+
         {showProfile && (
-  <div className="modal-backdrop">
-    <div className="modal-card">
-      <div className="modal-header">
-        <h3>Profile User</h3>
+          <div className="modal-backdrop">
+            <div className="modal-card">
+              <div className="modal-header">
+                <h3>Profile User</h3>
 
-        <button
-          type="button"
-          onClick={() => setShowProfile(false)}
-        >
-          ✕
-        </button>
-      </div>
+                <button type="button" onClick={() => setShowProfile(false)}>
+                  ✕
+                </button>
+              </div>
 
-      <div className="detail-summary">
-        <div>
-          <span>Nama</span>
-          <strong>{currentUser.name}</strong>
-        </div>
+              <div className="detail-summary">
+                <div>
+                  <span>Nama</span>
+                  <strong>{currentUser.name || "-"}</strong>
+                </div>
 
-        <div>
-          <span>Email</span>
-          <strong>{currentUser.email}</strong>
-        </div>
+                <div>
+                  <span>Email</span>
+                  <strong>{currentUser.email || "-"}</strong>
+                </div>
 
-        <div>
-          <span>Role</span>
-          <strong>{currentUser.role}</strong>
-        </div>
+                <div>
+                  <span>Role</span>
+                  <strong>{currentUser.role || "-"}</strong>
+                </div>
 
-        <div>
-          <span>Status</span>
-          <strong>
-            {currentUser.isActive ? "Aktif" : "Nonaktif"}
-          </strong>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+                <div>
+                  <span>Status</span>
+                  <strong>{currentUser.isActive === false ? "Nonaktif" : "Aktif"}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
-{showPassword && (
-  <div className="modal-backdrop">
-    <div className="modal-card">
-      <div className="modal-header">
-        <h3>Ganti Password</h3>
+        {showPassword && (
+          <div className="modal-backdrop">
+            <div className="modal-card">
+              <div className="modal-header">
+                <h3>Ganti Password</h3>
 
-        <button
-          type="button"
-          onClick={() => setShowPassword(false)}
-        >
-          ✕
-        </button>
-      </div>
+                <button type="button" onClick={() => setShowPassword(false)}>
+                  ✕
+                </button>
+              </div>
 
-      <form onSubmit={handleChangePassword}>
-        <div className="form-group">
-          <label>Password Baru</label>
+              <form onSubmit={handleChangePassword}>
+                <div className="form-group">
+                  <label>Password Baru</label>
 
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(e) =>
-              setNewPassword(e.target.value)
-            }
-            placeholder="Minimal 6 karakter"
-          />
-        </div>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Minimal 6 karakter"
+                  />
+                </div>
 
-        <div className="modal-actions">
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => setShowPassword(false)}
-          >
-            Batal
-          </button>
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setShowPassword(false)}
+                  >
+                    Batal
+                  </button>
 
-          <button
-            type="submit"
-            className="primary-button"
-          >
-            Simpan Password
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-)}
+                  <button type="submit" className="primary-button">
+                    Simpan Password
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
