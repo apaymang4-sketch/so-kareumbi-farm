@@ -321,13 +321,23 @@ function matchReportType(row, reportType) {
   }
 
   if (reportType === "ayam_mati") {
-    return type === "ayam_mati_upkir" && itemName.includes("mati");
+    return (
+      type === "ayam_mati" ||
+      (
+        type === "ayam_mati_upkir" &&
+        itemName.includes("mati")
+      )
+    );
   }
-
+  
   if (reportType === "ayam_upkir") {
     return (
-      type === "ayam_mati_upkir" &&
-      (itemName.includes("upkir") || itemName.includes("afkir"))
+      type === "ayam_upkir" ||
+      (
+        type === "ayam_mati_upkir" &&
+        (itemName.includes("upkir") ||
+         itemName.includes("afkir"))
+      )
     );
   }
 
