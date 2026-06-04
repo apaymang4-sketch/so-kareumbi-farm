@@ -37,7 +37,10 @@ import {
   changeCurrentUserPassword,
 } from "../services/authService";
 
-import { getAdminNotifications } from "../services/notificationService";
+import {
+  getAdminNotifications,
+  markNotificationAsRead,
+} from "../services/notificationService";
 
 const pageMenus = {
   master: {
@@ -180,13 +183,24 @@ function MainLayout() {
 
   async function loadNotifications() {
     try {
-      const data = await getAdminNotifications();
+      const data = await getAdminNotifications(currentUser.email || "");
       setNotifCount(data.count || 0);
       setNotifications(data.notifications || []);
     } catch (error) {
       console.error("Gagal mengambil notifikasi:", error);
       setNotifCount(0);
       setNotifications([]);
+    }
+  }
+  async function handleReadNotification(item) {
+    try {
+      await markNotificationAsRead(currentUser.email || "", item);
+  
+      setNotifications((prev) => prev.filter((notif) => notif.key !== item.key));
+      setNotifCount((prev) => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error("Gagal menandai notifikasi dibaca:", error);
+      alert("Gagal menandai notifikasi.");
     }
   }
 
@@ -381,13 +395,16 @@ function MainLayout() {
                     </div>
                   ) : (
                     notifications.slice(0, 10).map((item) => (
-                      <div
-                        className="dropdown-notif-item"
-                        key={`${item.type}-${item.id}`}
-                      >
-                        <strong>{item.title}</strong>
-                        <p>{item.message}</p>
-                      </div>
+                      <button
+  type="button"
+  className="dropdown-notif-item"
+  key={item.key}
+  onClick={() => handleReadNotification(item)}
+>
+  <strong>{item.title}</strong>
+  <p>{item.message}</p>
+  <small>Klik untuk tandai sudah dibaca</small>
+</button>
                     ))
                   )}
 

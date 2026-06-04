@@ -89,18 +89,22 @@ function AssignmentsPage() {
         id: item.id,
         name: item.name,
         type: "kandang",
-        label: `${item.name} - Kandang${item.ageWeeks ? ` - ${item.ageWeeks} minggu` : ""}`,
+        label: `${item.name} - Kandang${
+          item.ageWeeks ? ` - ${item.ageWeeks} minggu` : ""
+        }`,
       }));
 
-    if (form.taskType === "gudang") {
-      return activeLocations;
-    }
+    if (form.taskType === "gudang") return activeLocations;
 
     if (form.taskType === "telur") {
       return [...activeLocations, ...activeCages];
     }
 
-    if (form.taskType === "ayam_hidup" || form.taskType === "ayam_mati_upkir") {
+    if (
+      form.taskType === "ayam_hidup" ||
+      form.taskType === "ayam_mati" ||
+      form.taskType === "ayam_upkir"
+    ) {
       return activeCages;
     }
 
@@ -152,49 +156,35 @@ function AssignmentsPage() {
   async function handleSubmit(e) {
     e.preventDefault();
 
-    if (!form.sessionId) {
-      alert("Sesi opname wajib dipilih.");
-      return;
-    }
-
-    if (!form.userId) {
-      alert("Petugas wajib dipilih.");
-      return;
-    }
-
-    if (!form.taskType) {
-      alert("Tipe tugas wajib dipilih.");
-      return;
-    }
-
-    if (!form.targetId) {
-      alert("Lokasi/kandang wajib dipilih.");
-      return;
-    }
+    if (!form.sessionId) return alert("Sesi opname wajib dipilih.");
+    if (!form.userId) return alert("Petugas wajib dipilih.");
+    if (!form.taskType) return alert("Tipe tugas wajib dipilih.");
+    if (!form.targetId) return alert("Lokasi/kandang wajib dipilih.");
 
     const selectedSession = sessions.find((item) => item.id === form.sessionId);
     const selectedUser = users.find((item) => item.id === form.userId);
-    const selectedTarget = targetOptions.find((item) => item.id === form.targetId);
+    const selectedTarget = targetOptions.find(
+      (item) => item.id === form.targetId
+    );
 
-    if (!selectedSession) {
-      alert("Sesi opname tidak ditemukan.");
-      return;
+    if (!selectedSession) return alert("Sesi opname tidak ditemukan.");
+
+    if (
+      selectedSession.status === "selesai" ||
+      selectedSession.status === "dikunci"
+    ) {
+      return alert("Sesi selesai/dikunci tidak bisa dibuat assignment.");
     }
 
-    if (selectedSession.status === "selesai" || selectedSession.status === "dikunci") {
-      alert("Sesi selesai/dikunci tidak bisa dibuat assignment.");
-      return;
+    if (
+      !selectedUser ||
+      selectedUser.role !== "petugas" ||
+      selectedUser.isActive === false
+    ) {
+      return alert("Petugas tidak valid atau tidak aktif.");
     }
 
-    if (!selectedUser || selectedUser.role !== "petugas" || selectedUser.isActive === false) {
-      alert("Petugas tidak valid atau tidak aktif.");
-      return;
-    }
-
-    if (!selectedTarget) {
-      alert("Lokasi/kandang tidak valid.");
-      return;
-    }
+    if (!selectedTarget) return alert("Lokasi/kandang tidak valid.");
 
     const duplicate = assignments.some(
       (item) =>
@@ -205,8 +195,7 @@ function AssignmentsPage() {
     );
 
     if (duplicate) {
-      alert("Assignment yang sama sudah ada.");
-      return;
+      return alert("Assignment yang sama sudah ada.");
     }
 
     try {
@@ -267,7 +256,10 @@ function AssignmentsPage() {
       <div className="page-header page-header-row">
         <div>
           <h1>Assignment Petugas</h1>
-          <p>Admin menentukan petugas hanya boleh menghitung lokasi/kandang yang ditugaskan.</p>
+          <p>
+            Admin menentukan petugas hanya boleh menghitung lokasi/kandang yang
+            ditugaskan.
+          </p>
         </div>
 
         <div className="page-actions">
@@ -360,11 +352,16 @@ function AssignmentsPage() {
             <form onSubmit={handleSubmit} className="form-grid">
               <div className="form-group">
                 <label>Sesi Opname</label>
-                <select name="sessionId" value={form.sessionId} onChange={handleChange}>
+                <select
+                  name="sessionId"
+                  value={form.sessionId}
+                  onChange={handleChange}
+                >
                   <option value="">Pilih Sesi</option>
                   {activeSessions.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.name} - {formatDate(item.date)} - {labelSessionStatus(item.status)}
+                      {item.name} - {formatDate(item.date)} -{" "}
+                      {labelSessionStatus(item.status)}
                     </option>
                   ))}
                 </select>
@@ -384,17 +381,26 @@ function AssignmentsPage() {
 
               <div className="form-group">
                 <label>Tipe Tugas</label>
-                <select name="taskType" value={form.taskType} onChange={handleChange}>
+                <select
+                  name="taskType"
+                  value={form.taskType}
+                  onChange={handleChange}
+                >
                   <option value="gudang">Hitung Gudang</option>
                   <option value="telur">Hitung Telur</option>
                   <option value="ayam_hidup">Hitung Ayam Hidup</option>
-                  <option value="ayam_mati_upkir">Hitung Ayam Mati/Upkir</option>
+                  <option value="ayam_mati">Hitung Ayam Mati</option>
+                  <option value="ayam_upkir">Hitung Ayam Upkir</option>
                 </select>
               </div>
 
               <div className="form-group">
                 <label>Lokasi / Kandang</label>
-                <select name="targetId" value={form.targetId} onChange={handleChange}>
+                <select
+                  name="targetId"
+                  value={form.targetId}
+                  onChange={handleChange}
+                >
                   <option value="">Pilih Lokasi/Kandang</option>
                   {targetOptions.map((item) => (
                     <option key={`${item.type}-${item.id}`} value={item.id}>
@@ -415,7 +421,11 @@ function AssignmentsPage() {
               </div>
 
               <div className="modal-actions">
-                <button type="button" className="secondary-button" onClick={closeForm}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={closeForm}
+                >
                   Batal
                 </button>
                 <button type="submit" className="primary-button">
@@ -435,6 +445,10 @@ function labelTaskType(type) {
     gudang: "Hitung Gudang",
     telur: "Hitung Telur",
     ayam_hidup: "Hitung Ayam Hidup",
+    ayam_mati: "Hitung Ayam Mati",
+    ayam_upkir: "Hitung Ayam Upkir",
+
+    // legacy lama supaya data lama tetap kebaca
     ayam_mati_upkir: "Hitung Mati/Upkir",
   };
 
