@@ -157,28 +157,30 @@ function DashboardPage() {
             <thead>
               <tr>
                 <th>Lokasi</th>
+                <th>Tugas</th>
                 <th>Petugas</th>
-                <th>Status</th>
                 <th>Progress</th>
+                <th>Status</th>
               </tr>
             </thead>
 
             <tbody>
               {assignments.length === 0 ? (
                 <tr>
-                  <td colSpan="4">Belum ada assignment.</td>
+                  <td colSpan="5">Belum ada assignment.</td>
                 </tr>
               ) : (
                 assignments.slice(0, 6).map((item) => (
                   <tr key={item.id}>
                     <td>{item.targetName || "-"}</td>
+                    <td>{item.taskTypeLabel || labelTaskType(item.taskType)}</td>
                     <td>{item.userName || "-"}</td>
+                    <td>{getAssignmentProgressText(item, counts)}</td>
                     <td>
                       <span className={`badge ${statusBadge(item.status)}`}>
                         {labelAssignmentStatus(item.status)}
                       </span>
                     </td>
-                    <td>{Number(item.progress || 0)}%</td>
                   </tr>
                 ))
               )}
@@ -272,12 +274,20 @@ function isTelurBagus(item) {
 
   return (
     item.type === "telur" &&
-    (
-      itemName.includes("bagus") ||
+    (itemName.includes("bagus") ||
       itemName.includes("utuh") ||
-      itemName.includes("normal")
-    )
+      itemName.includes("normal"))
   );
+}
+
+function getAssignmentProgressText(item, counts) {
+  if (item.taskType !== "ayam_hidup") {
+    return `${item.progress || 0}%`;
+  }
+
+  const rows = counts.filter((x) => x.assignmentId === item.id && x.type === "ayam_hidup");
+
+  return `${rows.length} Sekat`;
 }
 
 function getFinalQty(row) {
@@ -292,12 +302,27 @@ function getDifference(row) {
   return getFinalQty(row) - Number(row.systemQty || 0);
 }
 
+function labelTaskType(type) {
+  const labels = {
+    gudang: "Hitung Gudang",
+    telur: "Hitung Telur",
+    ayam_hidup: "Hitung Ayam Hidup",
+    ayam_mati: "Hitung Ayam Mati",
+    ayam_upkir: "Hitung Ayam Upkir",
+    ayam_mati_upkir: "Hitung Mati/Upkir Lama",
+  };
+
+  return labels[type] || type || "-";
+}
+
 function labelType(type) {
   const labels = {
     gudang: "Gudang",
     telur: "Telur",
     ayam_hidup: "Ayam Hidup",
-    ayam_mati_upkir: "Mati / Upkir",
+    ayam_mati: "Ayam Mati",
+    ayam_upkir: "Ayam Upkir",
+    ayam_mati_upkir: "Mati / Upkir Lama",
   };
 
   return labels[type] || type || "-";

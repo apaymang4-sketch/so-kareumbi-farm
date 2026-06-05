@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import {
-  getStockCounts,
-  updateStockCount,
-} from "../../services/countService";
+import { getStockCounts, updateStockCount } from "../../services/countService";
 
 const emptyCorrection = {
   id: null,
@@ -66,7 +63,9 @@ function ReviewPage() {
         selectedSession === "semua" ? true : item.sessionId === selectedSession;
 
       const matchPetugas =
-        selectedPetugas === "semua" ? true : item.countedBy === selectedPetugas;
+        selectedPetugas === "semua"
+          ? true
+          : String(item.countedBy || "").includes(selectedPetugas);
 
       const matchType =
         selectedType === "semua" ? true : item.type === selectedType;
@@ -104,7 +103,6 @@ function ReviewPage() {
         await Promise.all(
           item.children.map((child) =>
             updateStockCount(child.id, {
-              ...child,
               status: "disetujui",
               reviewedBy: "Admin",
               reviewedAt: new Date().toISOString(),
@@ -113,7 +111,6 @@ function ReviewPage() {
         );
       } else {
         await updateStockCount(item.id, {
-          ...item,
           status: "disetujui",
           reviewedBy: "Admin",
           reviewedAt: new Date().toISOString(),
@@ -137,7 +134,6 @@ function ReviewPage() {
         await Promise.all(
           item.children.map((child) =>
             updateStockCount(child.id, {
-              ...child,
               status: "perlu_hitung_ulang",
               reviewedBy: "Admin",
               reviewedAt: new Date().toISOString(),
@@ -146,7 +142,6 @@ function ReviewPage() {
         );
       } else {
         await updateStockCount(item.id, {
-          ...item,
           status: "perlu_hitung_ulang",
           reviewedBy: "Admin",
           reviewedAt: new Date().toISOString(),
@@ -196,7 +191,6 @@ function ReviewPage() {
 
     try {
       await updateStockCount(correction.id, {
-        ...selected,
         correctedQty: Number(correction.correctedQty),
         correctionReason: correction.correctionReason.trim(),
         status: "dikoreksi",
@@ -235,12 +229,8 @@ function ReviewPage() {
       <div className="toolbar-card toolbar-row">
         <div className="search-box">
           <label>Sesi Opname</label>
-          <select
-            value={selectedSession}
-            onChange={(e) => setSelectedSession(e.target.value)}
-          >
+          <select value={selectedSession} onChange={(e) => setSelectedSession(e.target.value)}>
             <option value="semua">Semua Sesi</option>
-
             {sessions.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
@@ -251,12 +241,8 @@ function ReviewPage() {
 
         <div className="search-box">
           <label>Petugas</label>
-          <select
-            value={selectedPetugas}
-            onChange={(e) => setSelectedPetugas(e.target.value)}
-          >
+          <select value={selectedPetugas} onChange={(e) => setSelectedPetugas(e.target.value)}>
             <option value="semua">Semua Petugas</option>
-
             {petugas.map((item) => (
               <option key={item} value={item}>
                 {item}
@@ -267,15 +253,14 @@ function ReviewPage() {
 
         <div className="search-box">
           <label>Jenis Data</label>
-          <select
-            value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value)}
-          >
+          <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
             <option value="semua">Semua Jenis</option>
             <option value="gudang">Gudang</option>
             <option value="telur">Telur</option>
             <option value="ayam_hidup">Ayam Hidup</option>
-            <option value="ayam_mati_upkir">Mati / Upkir</option>
+            <option value="ayam_mati">Ayam Mati</option>
+            <option value="ayam_upkir">Ayam Upkir</option>
+            <option value="ayam_mati_upkir">Mati / Upkir Lama</option>
           </select>
         </div>
 
@@ -321,33 +306,24 @@ function ReviewPage() {
                 const difference = finalQty - Number(item.systemQty || 0);
 
                 return (
-                  <tr
-                    key={item.id}
-                    className="clickable-row"
-                    onClick={() => setDetailRow(item)}
-                  >
+                  <tr key={item.id} className="clickable-row" onClick={() => setDetailRow(item)}>
                     <td className="cell-ellipsis" title={item.locationName}>
                       {item.locationName || "-"}
                     </td>
-
                     <td className="cell-ellipsis" title={item.itemName}>
                       {item.itemName || "-"}
                     </td>
-
                     <td>
                       {formatNumber(item.systemQty)} {item.unit}
                     </td>
-
                     <td>
                       {formatNumber(item.countedQty)} {item.unit}
                     </td>
-
                     <td>
                       <span className={difference === 0 ? "badge green" : "badge red"}>
                         {formatNumber(difference)}
                       </span>
                     </td>
-
                     <td>
                       {item.isGroup
                         ? "-"
@@ -355,13 +331,11 @@ function ReviewPage() {
                         ? "-"
                         : `${formatNumber(item.correctedQty)} ${item.unit}`}
                     </td>
-
                     <td>
                       <strong>
                         {formatNumber(finalQty)} {item.unit}
                       </strong>
                     </td>
-
                     <td>
                       <span className={`badge ${statusBadge(item.status)}`}>
                         {labelStatus(item.status)}
@@ -380,7 +354,6 @@ function ReviewPage() {
           <div className="modal-card detail-modal">
             <div className="modal-header">
               <h3>Detail Review Data</h3>
-
               <button type="button" onClick={() => setDetailRow(null)}>
                 ×
               </button>
@@ -391,17 +364,14 @@ function ReviewPage() {
                 <span>Sesi</span>
                 <strong>{detailRow.sessionName || "-"}</strong>
               </div>
-
               <div>
                 <span>Jenis</span>
                 <strong>{labelType(detailRow.type)}</strong>
               </div>
-
               <div>
                 <span>Petugas</span>
                 <strong>{detailRow.countedBy || "-"}</strong>
               </div>
-
               <div>
                 <span>Waktu Input</span>
                 <strong>{formatDateTime(detailRow.countedAt)}</strong>
@@ -409,7 +379,12 @@ function ReviewPage() {
             </div>
 
             {detailRow.isGroup ? (
-              <AyamHidupGroupDetail row={detailRow} />
+              <AyamHidupGroupDetail
+                row={{
+                  ...detailRow,
+                  onCorrection: openCorrection,
+                }}
+              />
             ) : (
               <table className="data-table detail-table">
                 <tbody>
@@ -417,19 +392,16 @@ function ReviewPage() {
                     <th>Lokasi</th>
                     <td>{detailRow.locationName || "-"}</td>
                   </tr>
-
                   <tr>
                     <th>Item</th>
                     <td>{detailRow.itemName || "-"}</td>
                   </tr>
-
                   <tr>
                     <th>Stok Sistem</th>
                     <td>
                       {formatNumber(detailRow.systemQty)} {detailRow.unit}
                     </td>
                   </tr>
-
                   <tr>
                     <th>Hasil Petugas</th>
                     <td>
@@ -443,22 +415,18 @@ function ReviewPage() {
                         <th>Kg Timbang</th>
                         <td>{formatNumber(detailRow.weightKg)} Kg</td>
                       </tr>
-
                       <tr>
                         <th>Jumlah Butir</th>
                         <td>{formatNumber(detailRow.eggButir)} Butir</td>
                       </tr>
-
                       <tr>
                         <th>Jumlah Ikat</th>
                         <td>{formatNumber(detailRow.eggIkat)} Ikat</td>
                       </tr>
-
                       <tr>
                         <th>Jumlah Tray</th>
                         <td>{formatNumber(detailRow.eggTray)} Tray</td>
                       </tr>
-
                       <tr>
                         <th>Jumlah Peti</th>
                         <td>{formatNumber(detailRow.eggPeti)} Peti</td>
@@ -473,7 +441,6 @@ function ReviewPage() {
                       {detailRow.unit}
                     </td>
                   </tr>
-
                   <tr>
                     <th>Koreksi Admin</th>
                     <td>
@@ -482,7 +449,6 @@ function ReviewPage() {
                         : `${formatNumber(detailRow.correctedQty)} ${detailRow.unit}`}
                     </td>
                   </tr>
-
                   <tr>
                     <th>Final</th>
                     <td>
@@ -491,12 +457,10 @@ function ReviewPage() {
                       </strong>
                     </td>
                   </tr>
-
                   <tr>
                     <th>Status</th>
                     <td>{labelStatus(detailRow.status)}</td>
                   </tr>
-
                   <tr>
                     <th>Alasan Koreksi</th>
                     <td>{detailRow.correctionReason || "-"}</td>
@@ -529,7 +493,6 @@ function ReviewPage() {
           <div className="modal-card">
             <div className="modal-header">
               <h3>Koreksi Data</h3>
-
               <button type="button" onClick={closeCorrection}>
                 ×
               </button>
@@ -588,7 +551,6 @@ function ReviewPage() {
                 <button type="button" className="secondary-button" onClick={closeCorrection}>
                   Batal
                 </button>
-
                 <button type="submit" className="primary-button">
                   Simpan Koreksi
                 </button>
@@ -649,6 +611,7 @@ function AyamHidupGroupDetail({ row }) {
                 <th>Jumlah</th>
                 <th>Petugas</th>
                 <th>Waktu</th>
+                <th>Aksi</th>
               </tr>
             </thead>
 
@@ -662,6 +625,17 @@ function AyamHidupGroupDetail({ row }) {
                   </td>
                   <td>{item.countedBy || "-"}</td>
                   <td>{formatDateTime(item.countedAt)}</td>
+                  <td>
+                    <button
+                      className="table-button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        row.onCorrection(item);
+                      }}
+                    >
+                      Koreksi
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -682,12 +656,7 @@ function buildReviewRows(rows) {
       return;
     }
 
-    const key = [
-      item.assignmentId || "",
-      item.sessionId || "",
-      item.locationId || "",
-      item.countedBy || "",
-    ].join("__");
+    const key = [item.sessionId || "", item.locationId || "", item.type || ""].join("__");
 
     if (!ayamGroups.has(key)) {
       ayamGroups.set(key, {
@@ -701,18 +670,29 @@ function buildReviewRows(rows) {
         correctedQty: "",
         finalQty: 0,
         children: [],
+        petugasList: new Set(),
       });
     }
 
     const group = ayamGroups.get(key);
     group.children.push(item);
+
+    if (item.countedBy) {
+      group.petugasList.add(item.countedBy);
+    }
+
     group.countedQty += Number(item.countedQty || 0);
     group.finalQty += getChildFinalQty(item);
     group.countedAt = getLatestDate(group.countedAt, item.countedAt);
     group.status = mergeStatus(group.children);
   });
 
-  return [...result, ...Array.from(ayamGroups.values())];
+  const groups = Array.from(ayamGroups.values()).map((group) => ({
+    ...group,
+    countedBy: Array.from(group.petugasList || []).join(", "),
+  }));
+
+  return [...result, ...groups];
 }
 
 function groupByLorong(items) {
@@ -790,7 +770,9 @@ function labelType(type) {
     gudang: "Gudang",
     telur: "Telur",
     ayam_hidup: "Ayam Hidup",
-    ayam_mati_upkir: "Mati / Upkir",
+    ayam_mati: "Ayam Mati",
+    ayam_upkir: "Ayam Upkir",
+    ayam_mati_upkir: "Mati / Upkir Lama",
   };
 
   return labels[type] || type || "-";

@@ -160,6 +160,9 @@ function AssignmentsPage() {
     if (!form.userId) return alert("Petugas wajib dipilih.");
     if (!form.taskType) return alert("Tipe tugas wajib dipilih.");
     if (!form.targetId) return alert("Lokasi/kandang wajib dipilih.");
+    if (form.taskType === "ayam_hidup" && !form.note.trim()) {
+      return alert("Untuk Hitung Ayam Hidup, catatan wajib diisi. Contoh: Lorong 1, Lorong 2, atau Area kanan.");
+    }
 
     const selectedSession = sessions.find((item) => item.id === form.sessionId);
     const selectedUser = users.find((item) => item.id === form.userId);
@@ -196,6 +199,22 @@ function AssignmentsPage() {
 
     if (duplicate) {
       return alert("Assignment yang sama sudah ada.");
+      
+    }
+    const sameCageOtherPetugas = assignments.some(
+      (item) =>
+        item.sessionId === form.sessionId &&
+        item.taskType === form.taskType &&
+        item.targetId === form.targetId &&
+        item.userId !== form.userId
+    );
+    
+    if (sameCageOtherPetugas && form.taskType === "ayam_hidup") {
+      const ok = confirm(
+        "Kandang ini sudah ditugaskan ke petugas lain.\n\nLanjut buat assignment tambahan untuk pembagian area/l湧orong?"
+      );
+    
+      if (!ok) return;
     }
 
     try {
@@ -411,12 +430,18 @@ function AssignmentsPage() {
               </div>
 
               <div className="form-group full">
-                <label>Catatan</label>
+              <label>
+  Catatan {form.taskType === "ayam_hidup" ? "(Wajib untuk pembagian area)" : ""}
+</label>
                 <input
                   name="note"
                   value={form.note}
                   onChange={handleChange}
-                  placeholder="Opsional"
+                  placeholder={
+                    form.taskType === "ayam_hidup"
+                      ? "Wajib. Contoh: Lorong 1 / Lorong 2 / Area kanan"
+                      : "Opsional"
+                  }
                 />
               </div>
 
