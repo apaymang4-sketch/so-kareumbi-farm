@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 
-import {
-  getAssignments,
-} from "../../services/assignmentService";
+import { getAssignments } from "../../services/assignmentService";
+import { getStockCounts } from "../../services/countService";
 
 function MonitoringPage() {
   const [assignments, setAssignments] = useState([]);
+  const [counts, setCounts] = useState([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("semua");
   const [detailRow, setDetailRow] = useState(null);
@@ -18,8 +18,14 @@ function MonitoringPage() {
   async function loadAssignments() {
     try {
       setLoading(true);
-      const data = await getAssignments();
-      setAssignments(data);
+
+      const [assignmentData, countData] = await Promise.all([
+        getAssignments(),
+        getStockCounts(),
+      ]);
+
+      setAssignments(assignmentData);
+      setCounts(countData);
     } catch (error) {
       console.error(error);
       alert("Gagal mengambil data monitoring dari Firebase.");
@@ -52,8 +58,7 @@ function MonitoringPage() {
     const selesai = assignments.filter((item) => item.status === "selesai").length;
     const perluCek = assignments.filter((item) => item.status === "perlu_cek").length;
 
-    const progress =
-      total === 0 ? 0 : Math.round((selesai / total) * 100);
+    const progress = total === 0 ? 0 : Math.round((selesai / total) * 100);
 
     return {
       total,
@@ -101,10 +106,7 @@ function MonitoringPage() {
 
         <div className="search-box">
           <label>Status</label>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="semua">Semua Status</option>
             <option value="belum_dihitung">Belum Dihitung</option>
             <option value="proses">Proses</option>
@@ -167,7 +169,12 @@ function MonitoringPage() {
                             style={{ width: `${progress}%` }}
                           />
                         </div>
-                        <span>{progress}%</span>
+
+                        {item.taskType === "ayam_hidup" ? (
+                          <span>{getAyamHidupProgress(item, counts)} Sekat</span>
+                        ) : (
+                          <span>{progress}%</span>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -231,7 +238,12 @@ function MonitoringPage() {
                           style={{ width: `${Number(detailRow.progress || 0)}%` }}
                         />
                       </div>
-                      <span>{Number(detailRow.progress || 0)}%</span>
+
+                      {detailRow.taskType === "ayam_hidup" ? (
+                        <span>{getAyamHidupProgress(detailRow, counts)} Sekat</span>
+                      ) : (
+                        <span>{Number(detailRow.progress || 0)}%</span>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -249,11 +261,72 @@ function MonitoringPage() {
                 </tr>
               </tbody>
             </table>
+
+            {detailRow.taskType === "ayam_hidup" && (
+              <div className="table-card" style={{ marginTop: 16 }}>
+                <h3>Detail Sekat Terinput</h3>
+
+                <table className="data-table compact-table">
+                  <thead>
+                    <tr>
+                      <th>Lorong</th>
+                      <th>Baris</th>
+                      <th>Sekat</th>
+                      <th>Jumlah</th>
+                      <th>Petugas</th>
+                      <th>Waktu</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {getAyamHidupRows(detailRow, counts).length === 0 ? (
+                      <tr>
+                        <td colSpan="6">Belum ada sekat yang masuk.</td>
+                      </tr>
+                    ) : (
+                      getAyamHidupRows(detailRow, counts).map((row) => (
+                        <tr key={row.id}>
+                          <td>{row.lorong || "-"}</td>
+                          <td>{row.baris || "-"}</td>
+                          <td>{row.sekat || "-"}</td>
+                          <td>
+                            <strong>{formatNumber(row.countedQty)} Ekor</strong>
+                          </td>
+                          <td>{row.countedBy || "-"}</td>
+                          <td>{formatDateTime(row.countedAt)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
     </div>
   );
+}
+
+function getAyamHidupProgress(item, counts) {
+  if (item.taskType !== "ayam_hidup") {
+    return Number(item.progress || 0);
+  }
+
+  const rows = counts.filter((x) => x.assignmentId === item.id && x.type === "ayam_hidup");
+
+  return rows.length;
+}
+
+function getAyamHidupRows(item, counts) {
+  return counts
+    .filter((x) => x.assignmentId === item.id && x.type === "ayam_hidup")
+    .sort(
+      (a, b) =>
+        Number(a.lorong || 0) - Number(b.lorong || 0) ||
+        Number(a.baris || 0) - Number(b.baris || 0) ||
+        Number(a.sekat || 0) - Number(b.sekat || 0)
+    );
 }
 
 function SummaryCard({ title, value, type = "blue" }) {
@@ -270,7 +343,9 @@ function labelTaskType(type) {
     gudang: "Hitung Gudang",
     telur: "Hitung Telur",
     ayam_hidup: "Hitung Ayam Hidup",
-    ayam_mati_upkir: "Hitung Mati/Upkir",
+    ayam_mati: "Hitung Ayam Mati",
+    ayam_upkir: "Hitung Ayam Upkir",
+    ayam_mati_upkir: "Hitung Mati/Upkir Lama",
   };
 
   return labels[type] || type;
@@ -305,6 +380,10 @@ function labelTargetType(type) {
   };
 
   return labels[type] || type || "-";
+}
+
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString("id-ID");
 }
 
 function formatDate(date) {

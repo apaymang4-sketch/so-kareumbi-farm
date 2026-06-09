@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { getStockCounts, updateStockCount } from "../../services/countService";
+import { updateAssignment } from "../../services/assignmentService";
 
 const emptyCorrection = {
   id: null,
@@ -130,17 +131,21 @@ function ReviewPage() {
     if (!ok) return;
 
     try {
+      const assignmentIds = new Set();
+
       if (item.isGroup && item.children?.length) {
         await Promise.all(
-          item.children.map((child) =>
-            updateStockCount(child.id, {
+          item.children.map((child) => {
+            if (child.assignmentId) assignmentIds.add(child.assignmentId);
+            return updateStockCount(child.id, {
               status: "perlu_hitung_ulang",
               reviewedBy: "Admin",
               reviewedAt: new Date().toISOString(),
-            })
-          )
+            });
+          })
         );
       } else {
+        if (item.assignmentId) assignmentIds.add(item.assignmentId);
         await updateStockCount(item.id, {
           status: "perlu_hitung_ulang",
           reviewedBy: "Admin",
@@ -148,8 +153,21 @@ function ReviewPage() {
         });
       }
 
+      // Reset assignment status so it appears back for the officer
+      if (assignmentIds.size > 0) {
+        await Promise.all(
+          Array.from(assignmentIds).map((id) =>
+            updateAssignment(id, {
+              status: "belum_dihitung",
+              progress: 0,
+            })
+          )
+        );
+      }
+
       await loadRows();
       setDetailRow(null);
+      alert("Berhasil menandai hitung ulang dan mengirim penugasan kembali ke petugas.");
     } catch (error) {
       console.error(error);
       alert("Gagal menandai hitung ulang.");
