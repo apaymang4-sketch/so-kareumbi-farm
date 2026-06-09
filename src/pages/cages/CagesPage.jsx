@@ -502,6 +502,7 @@ function CagesPage() {
         <table className="data-table">
           <thead>
             <tr>
+              <th>No</th>
               <th>Kode</th>
               <th>Nama Kandang</th>
               <th>Usia</th>
@@ -516,15 +517,16 @@ function CagesPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="8">Mengambil data...</td>
+                <td colSpan="9">Mengambil data...</td>
               </tr>
             ) : filteredCages.length === 0 ? (
               <tr>
-                <td colSpan="8">Belum ada data kandang.</td>
+                <td colSpan="9">Belum ada data kandang.</td>
               </tr>
             ) : (
-              filteredCages.map((item) => (
+              filteredCages.map((item, index) => (
                 <tr key={item.id}>
+                  <td>{index + 1}</td>
                   <td>{item.code}</td>
                   <td>{item.name}</td>
                   <td>{item.ageWeeks || 0} minggu</td>

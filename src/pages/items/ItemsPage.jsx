@@ -467,6 +467,7 @@ locationName: selectedLocation?.name || "",
         <table className="data-table">
           <thead>
             <tr>
+              <th>No</th>
               <th>Kode</th>
               <th>Nama Barang</th>
               <th>Kategori</th>
@@ -481,15 +482,16 @@ locationName: selectedLocation?.name || "",
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="8">Mengambil data...</td>
+                <td colSpan="9">Mengambil data...</td>
               </tr>
             ) : filteredItems.length === 0 ? (
               <tr>
-                <td colSpan="8">Tidak ada data barang.</td>
+                <td colSpan="9">Tidak ada data barang.</td>
               </tr>
             ) : (
-              filteredItems.map((item) => (
+              filteredItems.map((item, index) => (
                 <tr key={item.id}>
+                  <td>{index + 1}</td>
                   <td>{item.code}</td>
                   <td>{item.name}</td>
                   <td>{labelCategory(item.category)}</td>
