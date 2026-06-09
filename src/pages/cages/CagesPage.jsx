@@ -11,6 +11,7 @@ const emptyForm = {
   code: "",
   name: "",
   ageWeeks: "",
+  totalPopulation: "",
   lorongCount: "",
   barisCount: "",
   sekatCount: "",
@@ -111,6 +112,11 @@ function CagesPage() {
       return;
     }
 
+    if (!form.totalPopulation || Number(form.totalPopulation) <= 0) {
+      alert("Total populasi wajib diisi dan harus lebih dari 0.");
+      return;
+    }
+
     if (!form.lorongCount || !form.barisCount || !form.sekatCount) {
       alert("Jumlah lorong, baris, dan sekat wajib diisi.");
       return;
@@ -136,6 +142,7 @@ function CagesPage() {
         code: cageCode,
         name: cageName,
         ageWeeks: Number(form.ageWeeks || 0),
+        totalPopulation: Number(form.totalPopulation || 0),
         lorongCount: Number(form.lorongCount || 0),
         barisCount: Number(form.barisCount || 0),
         sekatCount: Number(form.sekatCount || 0),
@@ -173,6 +180,7 @@ function CagesPage() {
       code: item.code || "",
       name: item.name || "",
       ageWeeks: item.ageWeeks || "",
+      totalPopulation: item.totalPopulation || "",
       lorongCount: item.lorongCount || "",
       barisCount: item.barisCount || "",
       sekatCount: item.sekatCount || "",
@@ -258,6 +266,7 @@ function CagesPage() {
               <th>Kode</th>
               <th>Nama Kandang</th>
               <th>Usia</th>
+              <th>Total Populasi</th>
               <th>Struktur</th>
               <th>Total Sekat</th>
               <th>Status</th>
@@ -268,11 +277,11 @@ function CagesPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="7">Mengambil data...</td>
+                <td colSpan="8">Mengambil data...</td>
               </tr>
             ) : filteredCages.length === 0 ? (
               <tr>
-                <td colSpan="7">Belum ada data kandang.</td>
+                <td colSpan="8">Belum ada data kandang.</td>
               </tr>
             ) : (
               filteredCages.map((item) => (
@@ -280,6 +289,7 @@ function CagesPage() {
                   <td>{item.code}</td>
                   <td>{item.name}</td>
                   <td>{item.ageWeeks || 0} minggu</td>
+                  <td>{formatNumber(item.totalPopulation)} ekor</td>
                   <td>
                     {item.lorongCount} lorong x {item.barisCount} baris x{" "}
                     {item.sekatCount} sekat
@@ -389,6 +399,17 @@ function CagesPage() {
               </div>
 
               <div className="form-group">
+                <label>Total Populasi Ayam</label>
+                <input
+                  type="number"
+                  name="totalPopulation"
+                  value={form.totalPopulation}
+                  onChange={handleChange}
+                  placeholder="Contoh: 12000"
+                />
+              </div>
+
+              <div className="form-group">
                 <label>Jumlah Lorong</label>
                 <input
                   type="number"
@@ -445,6 +466,10 @@ function CagesPage() {
       )}
     </div>
   );
+}
+
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString("id-ID");
 }
 
 export default CagesPage;

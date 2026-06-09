@@ -89,9 +89,10 @@ function AssignmentsPage() {
         id: item.id,
         name: item.name,
         type: "kandang",
+        totalPopulation: Number(item.totalPopulation || 0),
         label: `${item.name} - Kandang${
           item.ageWeeks ? ` - ${item.ageWeeks} minggu` : ""
-        }`,
+        }${item.totalPopulation ? ` - ${formatNumber(item.totalPopulation)} ekor` : ""}`,
       }));
 
     if (form.taskType === "gudang") return activeLocations;
@@ -235,6 +236,7 @@ function AssignmentsPage() {
         targetId: selectedTarget.id,
         targetName: selectedTarget.name,
         targetType: selectedTarget.type,
+        targetPopulation: selectedTarget.totalPopulation || 0,
 
         status: "belum_dihitung",
         progress: 0,
@@ -544,6 +546,10 @@ function formatDate(date) {
     month: "short",
     year: "numeric",
   });
+}
+
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString("id-ID");
 }
 
 export default AssignmentsPage;

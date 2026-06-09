@@ -688,6 +688,7 @@ function buildReviewRows(rows) {
 
     const group = ayamGroups.get(key);
     group.children.push(item);
+    group.systemQty = getAyamHidupSystemQty(group, item);
 
     if (item.countedBy) {
       group.petugasList.add(item.countedBy);
@@ -748,6 +749,15 @@ function getChildFinalQty(item) {
   }
 
   return Number(item.countedQty || 0);
+}
+
+function getAyamHidupSystemQty(group, item) {
+  const currentQty = Number(group.systemQty || 0);
+  const rowQty = Number(
+    item.systemQty || item.targetPopulation || item.totalPopulation || 0
+  );
+
+  return Math.max(currentQty, rowQty);
 }
 
 function mergeStatus(items) {

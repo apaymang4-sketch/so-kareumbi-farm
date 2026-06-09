@@ -344,6 +344,7 @@ function ItemsPage() {
         importedCodes.add(code.toLowerCase());
 
         successRows.push({
+          row: rowNumber,
           code,
           name,
           category,
@@ -356,15 +357,30 @@ locationName: selectedLocation?.name || "",
         });
       });
 
+      const savedRows = [];
+
       for (const row of successRows) {
-        await createItem(row);
+        const { row: rowNumber, ...payload } = row;
+
+        try {
+          await createItem(payload);
+          savedRows.push(row);
+        } catch (error) {
+          console.error(`Gagal import barang baris ${rowNumber}:`, error);
+          failedRows.push({
+            row: rowNumber,
+            code: row.code || "-",
+            name: row.name || "-",
+            reason: getFirebaseErrorMessage(error),
+          });
+        }
       }
 
       await loadItems();
 
       const result = {
         totalRows: rows.length,
-        successCount: successRows.length,
+        successCount: savedRows.length,
         failedCount: failedRows.length,
         failedRows,
       };
@@ -709,6 +725,27 @@ function labelLocationType(type) {
   };
 
   return labels[type] || type;
+}
+
+function getFirebaseErrorMessage(error) {
+  const code = error?.code || "";
+
+  const messages = {
+    "permission-denied": "Ditolak Firebase: akun tidak punya izin menambah barang",
+    "unavailable": "Firebase tidak tersedia atau koneksi internet bermasalah",
+    "deadline-exceeded": "Koneksi ke Firebase terlalu lama, silakan coba lagi",
+    "resource-exhausted": "Kuota Firebase habis atau terlalu banyak request",
+    "unauthenticated": "Sesi login tidak valid, silakan login ulang",
+    "invalid-argument": "Data ditolak Firebase karena format tidak valid",
+  };
+
+  if (messages[code]) return messages[code];
+
+  if (error?.message) {
+    return `Gagal disimpan ke Firebase: ${error.message}`;
+  }
+
+  return "Gagal disimpan ke Firebase, detail error tidak tersedia";
 }
 
 export default ItemsPage;
