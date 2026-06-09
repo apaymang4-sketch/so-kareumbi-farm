@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { getStockCounts, updateStockCount } from "../../services/countService";
+import { getStockCounts, updateStockCount, deleteStockCount } from "../../services/countService";
 import { updateAssignment } from "../../services/assignmentService";
 
 const emptyCorrection = {
@@ -127,7 +127,7 @@ function ReviewPage() {
   }
 
   async function markRecount(item) {
-    const ok = confirm(`Tandai ${item.locationName} perlu hitung ulang?`);
+    const ok = confirm(`Hapus hasil input lama dan minta hitung ulang untuk ${item.locationName}?`);
     if (!ok) return;
 
     try {
@@ -137,20 +137,14 @@ function ReviewPage() {
         await Promise.all(
           item.children.map((child) => {
             if (child.assignmentId) assignmentIds.add(child.assignmentId);
-            return updateStockCount(child.id, {
-              status: "perlu_hitung_ulang",
-              reviewedBy: "Admin",
-              reviewedAt: new Date().toISOString(),
-            });
+            // Delete record so it's fresh for the officer
+            return deleteStockCount(child.id);
           })
         );
       } else {
         if (item.assignmentId) assignmentIds.add(item.assignmentId);
-        await updateStockCount(item.id, {
-          status: "perlu_hitung_ulang",
-          reviewedBy: "Admin",
-          reviewedAt: new Date().toISOString(),
-        });
+        // Delete record so it's fresh for the officer
+        await deleteStockCount(item.id);
       }
 
       // Reset assignment status so it appears back for the officer
@@ -167,10 +161,10 @@ function ReviewPage() {
 
       await loadRows();
       setDetailRow(null);
-      alert("Berhasil menandai hitung ulang dan mengirim penugasan kembali ke petugas.");
+      alert("Input lama dihapus. Penugasan dikirim kembali ke petugas.");
     } catch (error) {
       console.error(error);
-      alert("Gagal menandai hitung ulang.");
+      alert("Gagal memproses hitung ulang.");
     }
   }
 

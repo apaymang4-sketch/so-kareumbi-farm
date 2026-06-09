@@ -36,3 +36,7 @@ import {
       updatedAt: new Date().toISOString(),
     });
   }
+  
+  export async function deleteStockCount(id) {
+    return await deleteDoc(doc(db, collectionName, id));
+  }
