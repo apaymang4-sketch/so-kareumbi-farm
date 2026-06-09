@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 
 import {
   getCages,
@@ -6,6 +7,8 @@ import {
   updateCage,
   deleteCage,
 } from "../../services/cageService";
+
+const MAX_IMPORT_ROWS = 500;
 
 const emptyForm = {
   code: "",
@@ -19,11 +22,14 @@ const emptyForm = {
 };
 
 function CagesPage() {
+  const fileInputRef = useRef(null);
+
   const [cages, setCages] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [selectedCage, setSelectedCage] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [importResult, setImportResult] = useState(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -231,6 +237,210 @@ function CagesPage() {
     }
   }
 
+  function downloadTemplate() {
+    const rows = [
+      {
+        Kode: "KD001",
+        Nama: "Kandang A",
+        UsiaMinggu: 48,
+        TotalPopulasi: 12000,
+        JumlahLorong: 4,
+        JumlahBaris: 6,
+        JumlahSekat: 12,
+      },
+      {
+        Kode: "KD002",
+        Nama: "Kandang B",
+        UsiaMinggu: 36,
+        TotalPopulasi: 10000,
+        JumlahLorong: 3,
+        JumlahBaris: 6,
+        JumlahSekat: 10,
+      },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Template Kandang");
+    XLSX.writeFile(workbook, "template_import_kandang.xlsx");
+  }
+
+  async function handleImportExcel(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+
+      if (!workbook.SheetNames.length) {
+        alert("Import gagal. File Excel tidak memiliki sheet.");
+        return;
+      }
+
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      if (!rows.length) {
+        alert("Import gagal. File Excel kosong.");
+        return;
+      }
+
+      if (rows.length > MAX_IMPORT_ROWS) {
+        alert(
+          `Import gagal. Maksimal ${MAX_IMPORT_ROWS} baris sekali import. File ini berisi ${rows.length} baris.`
+        );
+        return;
+      }
+
+      const requiredHeaders = [
+        "Kode",
+        "Nama",
+        "UsiaMinggu",
+        "TotalPopulasi",
+        "JumlahLorong",
+        "JumlahBaris",
+        "JumlahSekat",
+      ];
+      const firstRow = rows[0] || {};
+      const missingHeaders = requiredHeaders.filter((header) => !(header in firstRow));
+
+      if (missingHeaders.length > 0) {
+        alert(
+          `Import gagal. Header Excel tidak sesuai.\n\nHeader wajib:\n${requiredHeaders.join(
+            " | "
+          )}\n\nHeader yang hilang:\n${missingHeaders.join(", ")}`
+        );
+        return;
+      }
+
+      const existingCodes = new Set(cages.map((item) => String(item.code || "").toLowerCase()));
+      const importedCodes = new Set();
+
+      const validRows = [];
+      const failedRows = [];
+
+      rows.forEach((row, index) => {
+        const rowNumber = index + 2;
+        const code = String(row.Kode || "").trim().toUpperCase();
+        const name = String(row.Nama || "").trim();
+        const ageWeeks = Number(row.UsiaMinggu || 0);
+        const totalPopulation = Number(row.TotalPopulasi || 0);
+        const lorongCount = Number(row.JumlahLorong || 0);
+        const barisCount = Number(row.JumlahBaris || 0);
+        const sekatCount = Number(row.JumlahSekat || 0);
+
+        let reason = "";
+
+        if (!code) reason = "Kode kosong";
+        else if (!name) reason = "Nama kosong";
+        else if (existingCodes.has(code.toLowerCase())) reason = "Kode sudah ada di sistem";
+        else if (importedCodes.has(code.toLowerCase())) reason = "Kode duplikat di file Excel";
+        else if (Number.isNaN(ageWeeks) || ageWeeks < 0) reason = "Usia minggu tidak valid";
+        else if (Number.isNaN(totalPopulation) || totalPopulation <= 0) {
+          reason = "Total populasi wajib angka lebih dari 0";
+        } else if (Number.isNaN(lorongCount) || lorongCount <= 0) {
+          reason = "Jumlah lorong wajib angka lebih dari 0";
+        } else if (Number.isNaN(barisCount) || barisCount <= 0) {
+          reason = "Jumlah baris wajib angka lebih dari 0";
+        } else if (Number.isNaN(sekatCount) || sekatCount <= 0) {
+          reason = "Jumlah sekat wajib angka lebih dari 0";
+        }
+
+        if (reason) {
+          failedRows.push({
+            row: rowNumber,
+            code: code || "-",
+            name: name || "-",
+            reason,
+          });
+          return;
+        }
+
+        importedCodes.add(code.toLowerCase());
+
+        validRows.push({
+          row: rowNumber,
+          code,
+          name,
+          ageWeeks,
+          totalPopulation,
+          lorongCount,
+          barisCount,
+          sekatCount,
+        });
+      });
+
+      const savedRows = [];
+
+      for (const row of validRows) {
+        const cageId = `TEMP-${Date.now()}-${row.row}`;
+        const payload = {
+          code: row.code,
+          name: row.name,
+          ageWeeks: row.ageWeeks,
+          totalPopulation: row.totalPopulation,
+          lorongCount: row.lorongCount,
+          barisCount: row.barisCount,
+          sekatCount: row.sekatCount,
+          isActive: true,
+          isUsed: false,
+          structure: generateStructure(
+            cageId,
+            row.code,
+            row.name,
+            row.lorongCount,
+            row.barisCount,
+            row.sekatCount
+          ),
+        };
+
+        try {
+          await createCage(payload);
+          savedRows.push(row);
+        } catch (error) {
+          console.error(`Gagal import kandang baris ${row.row}:`, error);
+          failedRows.push({
+            row: row.row,
+            code: row.code || "-",
+            name: row.name || "-",
+            reason: getFirebaseErrorMessage(error),
+          });
+        }
+      }
+
+      await loadCages();
+
+      const result = {
+        totalRows: rows.length,
+        successCount: savedRows.length,
+        failedCount: failedRows.length,
+        failedRows,
+      };
+
+      setImportResult(result);
+
+      alert(
+        `Import selesai.\n\n` +
+          `Total baris dibaca: ${result.totalRows}\n` +
+          `Berhasil masuk: ${result.successCount}\n` +
+          `Gagal masuk: ${result.failedCount}\n\n` +
+          (result.failedCount > 0
+            ? `Contoh gagal:\nBaris ${result.failedRows[0].row}: ${result.failedRows[0].reason}`
+            : "Semua data berhasil masuk.")
+      );
+    } catch (error) {
+      console.error(error);
+      alert("Import gagal. Pastikan file Excel sesuai template.");
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  }
+
   return (
     <div className="page">
       <div className="page-header page-header-row">
@@ -240,11 +450,40 @@ function CagesPage() {
         </div>
 
         <div className="page-actions">
+          <button className="secondary-button" onClick={downloadTemplate}>
+            Download Template
+          </button>
+
+          <button
+            className="secondary-button"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Import Excel
+          </button>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            style={{ display: "none" }}
+            onChange={handleImportExcel}
+          />
+
           <button className="primary-button" onClick={openAddForm}>
             + Tambah Kandang
           </button>
         </div>
       </div>
+
+      {importResult && (
+        <div className="import-result-card">
+          <strong>Hasil Import:</strong>
+          <span>Total: {importResult.totalRows}</span>
+          <span>Berhasil: {importResult.successCount}</span>
+          <span>Gagal: {importResult.failedCount}</span>
+          <span>Maksimal import: {MAX_IMPORT_ROWS} baris</span>
+        </div>
+      )}
 
       <div className="toolbar-card">
         <div className="search-box">
@@ -326,6 +565,33 @@ function CagesPage() {
           </tbody>
         </table>
       </div>
+
+      {importResult?.failedRows?.length > 0 && (
+        <div className="table-card">
+          <h3>Data Gagal Import</h3>
+
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Baris Excel</th>
+                <th>Kode</th>
+                <th>Nama</th>
+                <th>Alasan</th>
+              </tr>
+            </thead>
+            <tbody>
+              {importResult.failedRows.slice(0, 50).map((item, index) => (
+                <tr key={index}>
+                  <td>{item.row}</td>
+                  <td>{item.code}</td>
+                  <td>{item.name}</td>
+                  <td>{item.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {selectedCage && (
         <div className="table-card">
@@ -470,6 +736,27 @@ function CagesPage() {
 
 function formatNumber(value) {
   return Number(value || 0).toLocaleString("id-ID");
+}
+
+function getFirebaseErrorMessage(error) {
+  const code = error?.code || "";
+
+  const messages = {
+    "permission-denied": "Ditolak Firebase: akun tidak punya izin menambah kandang",
+    unavailable: "Firebase tidak tersedia atau koneksi internet bermasalah",
+    "deadline-exceeded": "Koneksi ke Firebase terlalu lama, silakan coba lagi",
+    "resource-exhausted": "Kuota Firebase habis atau terlalu banyak request",
+    unauthenticated: "Sesi login tidak valid, silakan login ulang",
+    "invalid-argument": "Data ditolak Firebase karena format tidak valid",
+  };
+
+  if (messages[code]) return messages[code];
+
+  if (error?.message) {
+    return `Gagal disimpan ke Firebase: ${error.message}`;
+  }
+
+  return "Gagal disimpan ke Firebase, detail error tidak tersedia";
 }
 
 export default CagesPage;
