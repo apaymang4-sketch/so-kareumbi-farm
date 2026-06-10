@@ -285,6 +285,8 @@ function groupAyamHidupRekap(rows) {
           countedQty: 0,
           correctedQty: "",
           finalQty: 0,
+          hasCorrection: false,
+          correctionReasons: new Set(),
           children: [],
         });
       }
@@ -293,11 +295,21 @@ function groupAyamHidupRekap(rows) {
       group.children.push(row);
       group.countedQty += Number(row.countedQty || 0);
       group.finalQty += getFinalQty(row);
+      if (hasCorrection(row)) {
+        group.hasCorrection = true;
+      }
+      if (row.correctionReason) {
+        group.correctionReasons.add(row.correctionReason);
+      }
       group.countedAt = getLatestDate(group.countedAt, row.countedAt);
       group.status = mergeStatus(group.children);
     });
 
-  return Array.from(groups.values());
+  return Array.from(groups.values()).map((group) => ({
+    ...group,
+    correctedQty: group.hasCorrection ? group.finalQty : "",
+    correctionReason: Array.from(group.correctionReasons || []).join("; "),
+  }));
 }
 
 function matchReportType(row, reportType) {
@@ -392,15 +404,15 @@ function getFinalQty(row) {
     return Number(row.finalQty || row.countedQty || 0);
   }
 
-  if (
-    row.status === "dikoreksi" &&
-    row.correctedQty !== "" &&
-    row.correctedQty != null
-  ) {
+  if (hasCorrection(row)) {
     return Number(row.correctedQty || 0);
   }
 
   return Number(row.countedQty || 0);
+}
+
+function hasCorrection(row) {
+  return row.correctedQty !== "" && row.correctedQty != null;
 }
 
 function getDifference(row) {

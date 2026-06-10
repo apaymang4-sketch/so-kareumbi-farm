@@ -84,11 +84,7 @@ function ReviewPage() {
   function getFinalQty(item) {
     if (item.isGroup) return Number(item.finalQty || 0);
 
-    if (
-      item.status === "dikoreksi" &&
-      item.correctedQty !== "" &&
-      item.correctedQty != null
-    ) {
+    if (hasCorrection(item)) {
       return Number(item.correctedQty || 0);
     }
 
@@ -337,9 +333,7 @@ function ReviewPage() {
                       </span>
                     </td>
                     <td>
-                      {item.isGroup
-                        ? "-"
-                        : item.correctedQty === "" || item.correctedQty == null
+                      {item.correctedQty === "" || item.correctedQty == null
                         ? "-"
                         : `${formatNumber(item.correctedQty)} ${item.unit}`}
                     </td>
@@ -599,6 +593,22 @@ function AyamHidupGroupDetail({ row }) {
             </td>
           </tr>
           <tr>
+            <th>Koreksi Admin</th>
+            <td>
+              {row.correctedQty === "" || row.correctedQty == null
+                ? "-"
+                : `${formatNumber(row.correctedQty)} ${row.unit}`}
+            </td>
+          </tr>
+          <tr>
+            <th>Final Kandang</th>
+            <td>
+              <strong>
+                {formatNumber(row.finalQty)} {row.unit}
+              </strong>
+            </td>
+          </tr>
+          <tr>
             <th>Jumlah Sekat Diinput</th>
             <td>{row.children?.length || 0} sekat</td>
           </tr>
@@ -620,7 +630,9 @@ function AyamHidupGroupDetail({ row }) {
               <tr>
                 <th>Baris</th>
                 <th>Sekat</th>
-                <th>Jumlah</th>
+                <th>Hasil SO</th>
+                <th>Koreksi Admin</th>
+                <th>Final</th>
                 <th>Petugas</th>
                 <th>Waktu</th>
                 <th>Aksi</th>
@@ -634,6 +646,14 @@ function AyamHidupGroupDetail({ row }) {
                   <td>{item.sekat || "-"}</td>
                   <td>
                     <strong>{formatNumber(item.countedQty)} Ekor</strong>
+                  </td>
+                  <td>
+                    {item.correctedQty === "" || item.correctedQty == null
+                      ? "-"
+                      : `${formatNumber(item.correctedQty)} Ekor`}
+                  </td>
+                  <td>
+                    <strong>{formatNumber(getChildFinalQty(item))} Ekor</strong>
                   </td>
                   <td>{item.countedBy || "-"}</td>
                   <td>{formatDateTime(item.countedAt)}</td>
@@ -681,6 +701,8 @@ function buildReviewRows(rows) {
         countedQty: 0,
         correctedQty: "",
         finalQty: 0,
+        hasCorrection: false,
+        correctionReasons: new Set(),
         children: [],
         petugasList: new Set(),
       });
@@ -696,12 +718,20 @@ function buildReviewRows(rows) {
 
     group.countedQty += Number(item.countedQty || 0);
     group.finalQty += getChildFinalQty(item);
+    if (hasCorrection(item)) {
+      group.hasCorrection = true;
+    }
+    if (item.correctionReason) {
+      group.correctionReasons.add(item.correctionReason);
+    }
     group.countedAt = getLatestDate(group.countedAt, item.countedAt);
     group.status = mergeStatus(group.children);
   });
 
   const groups = Array.from(ayamGroups.values()).map((group) => ({
     ...group,
+    correctedQty: group.hasCorrection ? group.finalQty : "",
+    correctionReason: Array.from(group.correctionReasons || []).join("; "),
     countedBy: Array.from(group.petugasList || []).join(", "),
   }));
 
@@ -740,15 +770,15 @@ function groupByLorong(items) {
 }
 
 function getChildFinalQty(item) {
-  if (
-    item.status === "dikoreksi" &&
-    item.correctedQty !== "" &&
-    item.correctedQty != null
-  ) {
+  if (hasCorrection(item)) {
     return Number(item.correctedQty || 0);
   }
 
   return Number(item.countedQty || 0);
+}
+
+function hasCorrection(item) {
+  return item.correctedQty !== "" && item.correctedQty != null;
 }
 
 function getAyamHidupSystemQty(group, item) {

@@ -19,6 +19,7 @@ import {
   LogOut,
   KeyRound,
   User,
+  FileText,
 } from "lucide-react";
 
 import DashboardPage from "../pages/dashboard/DashboardPage";
@@ -31,6 +32,7 @@ import MonitoringPage from "../pages/monitoring/MonitoringPage";
 import ReportsPage from "../pages/reports/ReportsPage";
 import ReviewPage from "../pages/reviews/ReviewPage";
 import UsersSettingPage from "../pages/settings/UsersSettingPage";
+import MinutesPage from "../pages/minutes/MinutesPage";
 
 import {
   logoutUser,
@@ -68,6 +70,7 @@ const pageMenus = {
     color: "orange",
     menus: [
       { id: "reviewData", title: "Review Data", icon: Activity, component: ReviewPage },
+      { id: "minutes", title: "Berita Acara", icon: FileText, component: MinutesPage },
     ],
   },
 
