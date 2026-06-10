@@ -137,12 +137,14 @@ function MinutesPage() {
 
 function MinutesDocument({ report }) {
   const submittedDate = formatLongDate(report.submittedAt || report.signedAt);
+  const resultRows = getResultRows(report);
+  const reportTypeLabel = labelReportType(report.type);
 
   return (
     <div className="minutes-document" id="minutes-document">
       <div className="minutes-title">
         <h2>BERITA ACARA HASIL STOCK OPNAME</h2>
-        <p>{report.sessionName || "Stock Opname"}</p>
+        <p>{report.sessionName || "Stock Opname"} - {reportTypeLabel}</p>
       </div>
 
       <div className="minutes-meta">
@@ -166,31 +168,22 @@ function MinutesDocument({ report }) {
 
       <p className="minutes-paragraph">
         Pada tanggal {submittedDate}, telah dilaksanakan stock opname fisik pada
-        lokasi/kandang <strong>{report.locationName || "-"}</strong>. Berdasarkan
-        hasil perhitungan yang dilakukan oleh petugas stock opname dan disaksikan
-        oleh saksi yang bertanda tangan di bawah ini, para pihak menyatakan bahwa
-        hasil perhitungan berikut telah diperiksa dan sesuai dengan kondisi fisik
-        di lapangan pada saat pemeriksaan.
+        lokasi/kandang <strong>{report.locationName || "-"}</strong> untuk{" "}
+        <strong>{reportTypeLabel}</strong>. Berdasarkan hasil perhitungan yang
+        dilakukan oleh petugas stock opname dan disaksikan oleh saksi yang
+        bertanda tangan di bawah ini, para pihak menyatakan bahwa hasil
+        perhitungan berikut telah diperiksa dan sesuai dengan kondisi fisik di
+        lapangan pada saat pemeriksaan.
       </p>
 
       <table className="data-table minutes-result-table">
         <tbody>
-          <tr>
-            <th>Total Populasi</th>
-            <td>{formatNumber(report.totalPopulation)} Ekor</td>
-          </tr>
-          <tr>
-            <th>Ayam Hidup</th>
-            <td>{formatNumber(report.totalAyamHidup)} Ekor</td>
-          </tr>
-          <tr>
-            <th>Ayam Mati</th>
-            <td>{formatNumber(report.totalAyamMati)} Ekor</td>
-          </tr>
-          <tr>
-            <th>Ayam Upkir</th>
-            <td>{formatNumber(report.totalAyamUpkir)} Ekor</td>
-          </tr>
+          {resultRows.map((row, index) => (
+            <tr key={`${row.label}-${index}`}>
+              <th>{row.label}</th>
+              <td>{formatResultValue(row)}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
 
@@ -213,6 +206,77 @@ function MinutesDocument({ report }) {
       </div>
     </div>
   );
+}
+
+function getResultRows(report) {
+  if (Array.isArray(report.summaryRows) && report.summaryRows.length > 0) {
+    const summaryRows = report.summaryRows
+      .filter((row) => row && row.label)
+      .map((row) => ({
+        label: row.label,
+        value: row.value,
+        unit: row.unit || "",
+      }));
+
+    if (summaryRows.length > 0) {
+      return summaryRows;
+    }
+  }
+
+  const type = report.type || "";
+  const fallbackRows = {
+    ayam_hidup: [
+      {
+        label: "Ayam Hidup",
+        value: report.totalAyamHidup || report.totalPopulation || 0,
+        unit: "Ekor",
+      },
+    ],
+    ayam_mati: [
+      {
+        label: "Ayam Mati",
+        value: report.totalAyamMati || report.totalPopulation || 0,
+        unit: "Ekor",
+      },
+    ],
+    ayam_upkir: [
+      {
+        label: "Ayam Upkir",
+        value: report.totalAyamUpkir || report.totalPopulation || 0,
+        unit: "Ekor",
+      },
+    ],
+    ayam_mati_upkir: [
+      {
+        label: "Ayam Mati",
+        value: report.totalAyamMati || 0,
+        unit: "Ekor",
+      },
+      {
+        label: "Ayam Upkir",
+        value: report.totalAyamUpkir || 0,
+        unit: "Ekor",
+      },
+    ],
+  };
+
+  return fallbackRows[type] || [
+    {
+      label: labelReportType(type),
+      value: report.totalPopulation || 0,
+      unit: "",
+    },
+  ];
+}
+
+function formatResultValue(row) {
+  const rawValue = row.value;
+  const formattedValue = Number.isFinite(Number(rawValue))
+    ? formatNumber(rawValue)
+    : String(rawValue || "-");
+  const unit = row.unit ? ` ${row.unit}` : "";
+
+  return `${formattedValue}${unit}`;
 }
 
 function SignatureBlock({ title, name, imageUrl }) {
@@ -285,7 +349,7 @@ function SignatureImage({ imageUrl, alt }) {
         if (!cancelled) {
           setProcessedUrl(canvas.toDataURL("image/png"));
         }
-      } catch (error) {
+      } catch {
         if (!cancelled) {
           setProcessedUrl(imageUrl);
         }
@@ -344,6 +408,19 @@ function labelStatus(status) {
   };
 
   return labels[status] || status || "-";
+}
+
+function labelReportType(type) {
+  const labels = {
+    telur: "Hitung Telur",
+    ayam_hidup: "Hitung Ayam Hidup",
+    ayam_mati: "Hitung Ayam Mati",
+    ayam_upkir: "Hitung Ayam Upkir",
+    ayam_mati_upkir: "Hitung Mati/Upkir",
+    gudang: "Hitung Gudang",
+  };
+
+  return labels[type] || type || "Stock Opname";
 }
 
 function statusBadge(status) {

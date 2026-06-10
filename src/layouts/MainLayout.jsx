@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Grid2X2,
   Database,
@@ -33,6 +33,7 @@ import ReportsPage from "../pages/reports/ReportsPage";
 import ReviewPage from "../pages/reviews/ReviewPage";
 import UsersSettingPage from "../pages/settings/UsersSettingPage";
 import MinutesPage from "../pages/minutes/MinutesPage";
+import MasterRequestsPage from "../pages/masterRequests/MasterRequestsPage";
 
 import {
   logoutUser,
@@ -70,6 +71,7 @@ const pageMenus = {
     color: "orange",
     menus: [
       { id: "reviewData", title: "Review Data", icon: Activity, component: ReviewPage },
+      { id: "masterRequests", title: "Approval Master", icon: Database, component: MasterRequestsPage },
       { id: "minutes", title: "Berita Acara", icon: FileText, component: MinutesPage },
     ],
   },
@@ -179,14 +181,11 @@ function MainLayout() {
   const [notifications, setNotifications] = useState([]);
 
   const currentUser = JSON.parse(localStorage.getItem("so_user")) || {};
+  const currentUserEmail = currentUser.email || "";
 
-  useEffect(() => {
-    loadNotifications();
-  }, []);
-
-  async function loadNotifications() {
+  const loadNotifications = useCallback(async () => {
     try {
-      const data = await getAdminNotifications(currentUser.email || "");
+      const data = await getAdminNotifications(currentUserEmail);
       setNotifCount(data.count || 0);
       setNotifications(data.notifications || []);
     } catch (error) {
@@ -194,10 +193,15 @@ function MainLayout() {
       setNotifCount(0);
       setNotifications([]);
     }
-  }
+  }, [currentUserEmail]);
+
+  useEffect(() => {
+    Promise.resolve().then(loadNotifications);
+  }, [loadNotifications]);
+
   async function handleReadNotification(item) {
     try {
-      await markNotificationAsRead(currentUser.email || "", item);
+      await markNotificationAsRead(currentUserEmail, item);
   
       setNotifications((prev) => prev.filter((notif) => notif.key !== item.key));
       setNotifCount((prev) => Math.max(0, prev - 1));
