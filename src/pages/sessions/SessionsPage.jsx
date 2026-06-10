@@ -106,6 +106,9 @@ function SessionsPage() {
       return;
     }
 
+    const ok = confirm(`${editingId ? "Update" : "Simpan"} sesi opname ${form.name.trim()}?`);
+    if (!ok) return;
+
     try {
       const payload = {
         code: form.code.trim().toUpperCase(),
@@ -118,10 +121,8 @@ function SessionsPage() {
 
       if (editingId) {
         await updateSession(editingId, payload);
-        alert("Sesi opname berhasil diupdate.");
       } else {
         await createSession(payload);
-        alert("Sesi opname berhasil dibuat.");
       }
 
       await loadSessions();

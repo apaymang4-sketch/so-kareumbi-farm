@@ -1224,6 +1224,24 @@
     color: #dc2626;
   }
 
+  .reset-transaction-card {
+    max-width: 880px;
+  }
+
+  .reset-warning {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border: 1px solid #facc15;
+    background: #fef9c3;
+    color: #854d0e;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .reset-button {
+    min-width: 170px;
+  }
+
   .minutes-layout {
     display: grid;
     grid-template-columns: 420px minmax(620px, 1fr);

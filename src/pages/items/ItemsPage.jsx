@@ -136,6 +136,9 @@ function ItemsPage() {
       return;
     }
 
+    const ok = confirm(`${editingId ? "Update" : "Simpan"} barang ${form.name.trim()}?`);
+    if (!ok) return;
+
     try {
       const payload = {
         code: form.code.trim().toUpperCase(),
@@ -151,10 +154,8 @@ function ItemsPage() {
 
       if (editingId) {
         await updateItem(editingId, payload);
-        alert("Barang berhasil diupdate.");
       } else {
         await createItem(payload);
-        alert("Barang berhasil ditambahkan.");
       }
 
       await loadItems();

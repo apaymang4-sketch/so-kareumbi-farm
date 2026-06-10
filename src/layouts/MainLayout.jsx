@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Grid2X2,
   Database,
@@ -14,12 +14,12 @@ import {
   Egg,
   Bird,
   Settings,
-  Bell,
   UserCircle,
   LogOut,
   KeyRound,
   User,
   FileText,
+  RotateCcw,
 } from "lucide-react";
 
 import DashboardPage from "../pages/dashboard/DashboardPage";
@@ -32,6 +32,7 @@ import MonitoringPage from "../pages/monitoring/MonitoringPage";
 import ReportsPage from "../pages/reports/ReportsPage";
 import ReviewPage from "../pages/reviews/ReviewPage";
 import UsersSettingPage from "../pages/settings/UsersSettingPage";
+import ResetTransactionsPage from "../pages/settings/ResetTransactionsPage";
 import MinutesPage from "../pages/minutes/MinutesPage";
 import MasterRequestsPage from "../pages/masterRequests/MasterRequestsPage";
 
@@ -39,11 +40,6 @@ import {
   logoutUser,
   changeCurrentUserPassword,
 } from "../services/authService";
-
-import {
-  getAdminNotifications,
-  markNotificationAsRead,
-} from "../services/notificationService";
 
 const pageMenus = {
   master: {
@@ -159,6 +155,12 @@ const pageMenus = {
         icon: Settings,
         component: UsersSettingPage,
       },
+      {
+        id: "reset_transactions",
+        title: "Reset Transaksi",
+        icon: RotateCcw,
+        component: ResetTransactionsPage,
+      },
     ],
   },
 };
@@ -171,45 +173,12 @@ function MainLayout() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [activeMenuPanel, setActiveMenuPanel] = useState(null);
 
-  const [showNotif, setShowNotif] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
 
-  const [notifCount, setNotifCount] = useState(0);
-  const [notifications, setNotifications] = useState([]);
-
   const currentUser = JSON.parse(localStorage.getItem("so_user")) || {};
-  const currentUserEmail = currentUser.email || "";
-
-  const loadNotifications = useCallback(async () => {
-    try {
-      const data = await getAdminNotifications(currentUserEmail);
-      setNotifCount(data.count || 0);
-      setNotifications(data.notifications || []);
-    } catch (error) {
-      console.error("Gagal mengambil notifikasi:", error);
-      setNotifCount(0);
-      setNotifications([]);
-    }
-  }, [currentUserEmail]);
-
-  useEffect(() => {
-    Promise.resolve().then(loadNotifications);
-  }, [loadNotifications]);
-
-  async function handleReadNotification(item) {
-    try {
-      await markNotificationAsRead(currentUserEmail, item);
-  
-      setNotifications((prev) => prev.filter((notif) => notif.key !== item.key));
-      setNotifCount((prev) => Math.max(0, prev - 1));
-    } catch (error) {
-      console.error("Gagal menandai notifikasi dibaca:", error);
-      alert("Gagal menandai notifikasi.");
-    }
-  }
 
   async function handleLogout() {
     const ok = confirm("Yakin logout?");
@@ -377,64 +346,9 @@ function MainLayout() {
             <div className="top-action-wrap">
               <button
                 type="button"
-                className="notification-box"
-                onClick={() => {
-                  const next = !showNotif;
-                  setShowNotif(next);
-                  setShowUserMenu(false);
-
-                  if (next) {
-                    loadNotifications();
-                  }
-                }}
-              >
-                <Bell size={18} />
-                {notifCount > 0 && <span>{notifCount}</span>}
-              </button>
-
-              {showNotif && (
-                <div className="top-dropdown notif-dropdown">
-                  <h4>Notifikasi</h4>
-
-                  {notifications.length === 0 ? (
-                    <div className="dropdown-notif-item">
-                      <p>Tidak ada notifikasi baru.</p>
-                    </div>
-                  ) : (
-                    notifications.slice(0, 10).map((item) => (
-                      <button
-  type="button"
-  className="dropdown-notif-item"
-  key={item.key}
-  onClick={() => handleReadNotification(item)}
->
-  <strong>{item.title}</strong>
-  <p>{item.message}</p>
-  <small>Klik untuk tandai sudah dibaca</small>
-</button>
-                    ))
-                  )}
-
-                  <div className="dropdown-notif-item">
-                    <button
-                      type="button"
-                      className="table-button"
-                      onClick={loadNotifications}
-                    >
-                      Refresh Notifikasi
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="top-action-wrap">
-              <button
-                type="button"
                 className="login-user-box"
                 onClick={() => {
                   setShowUserMenu(!showUserMenu);
-                  setShowNotif(false);
                 }}
               >
                 <UserCircle size={20} />

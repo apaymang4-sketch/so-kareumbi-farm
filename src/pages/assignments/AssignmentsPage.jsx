@@ -218,6 +218,11 @@ function AssignmentsPage() {
       if (!ok) return;
     }
 
+    const ok = confirm(
+      `Simpan assignment ${selectedUser.name} untuk ${selectedTarget.name}?`
+    );
+    if (!ok) return;
+
     try {
       await createAssignment({
         sessionId: selectedSession.id,
@@ -244,7 +249,6 @@ function AssignmentsPage() {
         isUsed: false,
       });
 
-      alert("Assignment berhasil dibuat.");
       await loadAllData();
       closeForm();
     } catch (error) {

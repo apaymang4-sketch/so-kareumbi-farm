@@ -103,6 +103,9 @@ function LocationsPage() {
       return;
     }
 
+    const ok = confirm(`${editingId ? "Update" : "Simpan"} lokasi ${form.name.trim()}?`);
+    if (!ok) return;
+
     try {
       const payload = {
         code: form.code.trim().toUpperCase(),
@@ -115,10 +118,8 @@ function LocationsPage() {
 
       if (editingId) {
         await updateLocation(editingId, payload);
-        alert("Lokasi berhasil diupdate.");
       } else {
         await createLocation(payload);
-        alert("Lokasi berhasil ditambahkan.");
       }
 
       await loadLocations();
