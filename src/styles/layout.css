@@ -476,6 +476,54 @@
     margin-top: 4px;
   }
 
+  .app-alert-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 20000;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 86px 16px 16px;
+    background: rgba(15, 23, 42, 0.35);
+  }
+
+  .app-alert-dialog {
+    width: min(420px, 100%);
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+    padding: 16px;
+    text-align: left;
+  }
+
+  .app-alert-dialog h2 {
+    margin: 0 0 10px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #ef4444;
+    color: #0f172a;
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .app-alert-dialog p {
+    margin: 0;
+    color: #334155;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-line;
+  }
+
+  .app-alert-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+  }
+
+  .app-alert-actions .secondary-button {
+    margin-left: 0;
+  }
+
   /* ===== COMPACT ERP STYLE FIX ===== */
 
 .page {
