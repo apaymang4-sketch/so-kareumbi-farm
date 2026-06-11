@@ -95,7 +95,7 @@ function AssignmentsPage() {
         }${item.totalPopulation ? ` - ${formatNumber(item.totalPopulation)} ekor` : ""}`,
       }));
 
-    if (form.taskType === "gudang") return activeLocations;
+    if (form.taskType === "gudang") return [...activeLocations, ...activeCages];
 
     if (form.taskType === "telur") {
       return [...activeLocations, ...activeCages];
@@ -411,7 +411,7 @@ function AssignmentsPage() {
                   value={form.taskType}
                   onChange={handleChange}
                 >
-                  <option value="gudang">Hitung Gudang</option>
+                  <option value="gudang">Hitung Barang</option>
                   <option value="telur">Hitung Telur</option>
                   <option value="ayam_hidup">Hitung Ayam Hidup</option>
                   <option value="ayam_mati">Hitung Ayam Mati</option>
@@ -473,7 +473,7 @@ function AssignmentsPage() {
 
 function labelTaskType(type) {
   const labels = {
-    gudang: "Hitung Gudang",
+    gudang: "Hitung Barang",
     telur: "Hitung Telur",
     ayam_hidup: "Hitung Ayam Hidup",
     ayam_mati: "Hitung Ayam Mati",

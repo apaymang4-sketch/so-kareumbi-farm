@@ -304,7 +304,7 @@ function getDifference(row) {
 
 function labelTaskType(type) {
   const labels = {
-    gudang: "Hitung Gudang",
+    gudang: "Hitung Barang",
     telur: "Hitung Telur",
     ayam_hidup: "Hitung Ayam Hidup",
     ayam_mati: "Hitung Ayam Mati",

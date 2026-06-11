@@ -448,8 +448,8 @@ function getLatestDate(a, b) {
 
 function getReportTitle(type) {
   const titles = {
-    stok_gudang: "Laporan Stok Gudang",
-    selisih_gudang: "Laporan Selisih Semua Lokasi",
+    stok_gudang: "Laporan Stok Barang",
+    selisih_gudang: "Laporan Selisih Barang Semua Lokasi",
     ayam_hidup_rekap: "Laporan Ayam Hidup Rekap",
     ayam_hidup_detail: "Laporan Ayam Hidup Detail Sekat",
     ayam_mati: "Laporan Ayam Mati",

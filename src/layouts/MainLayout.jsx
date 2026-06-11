@@ -29,6 +29,7 @@ import ItemsPage from "../pages/items/ItemsPage";
 import SessionsPage from "../pages/sessions/SessionsPage";
 import AssignmentsPage from "../pages/assignments/AssignmentsPage";
 import MonitoringPage from "../pages/monitoring/MonitoringPage";
+import WarehouseInputPage from "../pages/input/WarehouseInputPage";
 import ReportsPage from "../pages/reports/ReportsPage";
 import ReviewPage from "../pages/reviews/ReviewPage";
 import UsersSettingPage from "../pages/settings/UsersSettingPage";
@@ -58,6 +59,7 @@ const pageMenus = {
     menus: [
       { id: "sessions", title: "Sesi Opname", icon: ClipboardList, component: SessionsPage },
       { id: "assignments", title: "Assignment", icon: UserCheck, component: AssignmentsPage },
+      { id: "input_barang", title: "Input Barang", icon: Package, component: WarehouseInputPage },
       { id: "monitoring", title: "Monitoring", icon: Activity, component: MonitoringPage },
     ],
   },
@@ -78,13 +80,13 @@ const pageMenus = {
     menus: [
       {
         id: "report_stok_gudang",
-        title: "Stok Gudang",
+        title: "Stok Barang",
         icon: Warehouse,
         component: () => <ReportsPage initialReport="stok_gudang" />,
       },
       {
         id: "report_selisih_gudang",
-        title: "Selisih Gudang",
+        title: "Selisih Barang",
         icon: FileSpreadsheet,
         component: () => <ReportsPage initialReport="selisih_gudang" />,
       },

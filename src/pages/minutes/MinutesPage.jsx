@@ -417,7 +417,7 @@ function labelReportType(type) {
     ayam_mati: "Hitung Ayam Mati",
     ayam_upkir: "Hitung Ayam Upkir",
     ayam_mati_upkir: "Hitung Mati/Upkir",
-    gudang: "Hitung Gudang",
+    gudang: "Hitung Barang",
   };
 
   return labels[type] || type || "Stock Opname";

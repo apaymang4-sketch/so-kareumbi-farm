@@ -5,21 +5,26 @@ import {
   getItems,
   createItem,
   updateItem,
-  deleteItem,
 } from "../../services/itemService";
-
 import { getLocations } from "../../services/locationService";
+import { getCages } from "../../services/cageService";
+import {
+  getItemStocks,
+  createItemStock,
+  updateItemStock,
+  deleteItemStock,
+} from "../../services/itemStockService";
 
 const MAX_IMPORT_ROWS = 500;
 
 const emptyForm = {
   code: "",
   name: "",
-  category: "bahan_baku",
+  category: "",
   unit: "Kg",
-  systemStock: "",
+  locationType: "gudang",
   locationId: "",
-  locationName: "",
+  systemStock: "",
   isActive: true,
 };
 
@@ -27,7 +32,9 @@ function ItemsPage() {
   const fileInputRef = useRef(null);
 
   const [items, setItems] = useState([]);
+  const [itemStocks, setItemStocks] = useState([]);
   const [locations, setLocations] = useState([]);
+  const [cages, setCages] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -36,15 +43,23 @@ function ItemsPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    loadItems();
-    loadLocations();
+    loadPageData();
   }, []);
 
-  async function loadItems() {
+  async function loadPageData() {
     try {
       setLoading(true);
-      const data = await getItems();
-      setItems(data);
+      const [itemData, stockData, locationData, cageData] = await Promise.all([
+        getItems(),
+        getItemStocks(),
+        getLocations(),
+        getCages(),
+      ]);
+
+      setItems(itemData);
+      setItemStocks(stockData);
+      setLocations(locationData.filter((item) => item.isActive !== false));
+      setCages(cageData.filter((item) => item.isActive !== false));
     } catch (error) {
       console.error(error);
       alert("Gagal mengambil data barang dari Firebase.");
@@ -53,29 +68,45 @@ function ItemsPage() {
     }
   }
 
-  async function loadLocations() {
-    try {
-      const data = await getLocations();
-      setLocations(data.filter((item) => item.isActive !== false));
-    } catch (error) {
-      console.error(error);
-      alert("Gagal mengambil data lokasi dari Firebase.");
-    }
-  }
+  const locationOptions = useMemo(() => {
+    const warehouseOptions = locations.map((item) => ({
+      id: item.id,
+      code: item.code || "",
+      name: item.name || "",
+      locationType: "gudang",
+      label: `${item.code || "-"} - ${item.name} - ${labelWarehouseType(item.type)}`,
+    }));
 
-  const filteredItems = useMemo(() => {
+    const cageOptions = cages.map((item) => ({
+      id: item.id,
+      code: item.code || "",
+      name: item.name || "",
+      locationType: "kandang",
+      label: `${item.code || "-"} - ${item.name} - Kandang`,
+    }));
+
+    return [...warehouseOptions, ...cageOptions];
+  }, [locations, cages]);
+
+  const filteredLocationOptions = useMemo(() => {
+    return locationOptions.filter((item) => item.locationType === form.locationType);
+  }, [locationOptions, form.locationType]);
+
+  const filteredRows = useMemo(() => {
     const keyword = search.toLowerCase();
 
-    return items.filter((item) => {
+    return itemStocks.filter((item) => {
       return (
-        String(item.code || "").toLowerCase().includes(keyword) ||
-        String(item.name || "").toLowerCase().includes(keyword) ||
-        labelCategory(item.category).toLowerCase().includes(keyword) ||
+        String(item.itemCode || "").toLowerCase().includes(keyword) ||
+        String(item.itemName || "").toLowerCase().includes(keyword) ||
+        String(item.category || "").toLowerCase().includes(keyword) ||
         String(item.unit || "").toLowerCase().includes(keyword) ||
-        String(item.locationName || "").toLowerCase().includes(keyword)
+        String(item.locationCode || "").toLowerCase().includes(keyword) ||
+        String(item.locationName || "").toLowerCase().includes(keyword) ||
+        labelLocationType(item.locationType).toLowerCase().includes(keyword)
       );
     });
-  }, [items, search]);
+  }, [itemStocks, search]);
 
   function openAddForm() {
     setEditingId(null);
@@ -92,166 +123,199 @@ function ItemsPage() {
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
 
-    if (name === "locationId") {
-      const selectedLocation = locations.find((item) => item.id === value);
-
-      setForm((prev) => ({
-        ...prev,
-        locationId: value,
-        locationName: selectedLocation?.name || "",
-      }));
-
-      return;
-    }
-
     setForm((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
+      ...(name === "locationType" ? { locationId: "" } : {}),
     }));
+  }
+
+  async function ensureItem(payload, currentItems = items) {
+    const existing = currentItems.find(
+      (item) => String(item.code || "").toLowerCase() === payload.code.toLowerCase()
+    );
+
+    const itemPayload = {
+      code: payload.code,
+      name: payload.name,
+      category: payload.category,
+      unit: payload.unit,
+      isActive: true,
+      isUsed: true,
+    };
+
+    if (existing) {
+      await updateItem(existing.id, {
+        ...existing,
+        ...itemPayload,
+      });
+
+      return { id: existing.id, ...existing, ...itemPayload };
+    }
+
+    const ref = await createItem(itemPayload);
+    return { id: ref.id, ...itemPayload };
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
 
-    if (!form.code.trim()) {
-      alert("Kode barang wajib diisi.");
-      return;
-    }
+    const code = form.code.trim().toUpperCase();
+    const name = form.name.trim();
+    const category = form.category.trim();
+    const selectedLocation = locationOptions.find(
+      (item) => item.id === form.locationId && item.locationType === form.locationType
+    );
+    const systemStock = Number(form.systemStock || 0);
 
-    if (!form.name.trim()) {
-      alert("Nama barang wajib diisi.");
-      return;
-    }
+    if (!code) return alert("Kode item wajib diisi.");
+    if (!name) return alert("Nama item wajib diisi.");
+    if (!category) return alert("Kategori wajib diisi.");
+    if (!form.unit.trim()) return alert("Satuan wajib diisi.");
+    if (!selectedLocation) return alert("Lokasi wajib dipilih.");
+    if (Number.isNaN(systemStock)) return alert("Stok sistem wajib angka.");
 
-    
-
-    const codeExists = items.some(
+    const duplicate = itemStocks.find(
       (item) =>
-        String(item.code || "").toLowerCase() === form.code.trim().toLowerCase() &&
-        item.id !== editingId
+        item.id !== editingId &&
+        String(item.itemCode || "").toLowerCase() === code.toLowerCase() &&
+        item.locationType === form.locationType &&
+        item.locationId === selectedLocation.id
     );
 
-    if (codeExists) {
-      alert("Kode barang sudah digunakan.");
+    if (duplicate) {
+      alert("Stok item untuk lokasi tersebut sudah ada. Gunakan Edit untuk mengubahnya.");
       return;
     }
 
-    const ok = confirm(`${editingId ? "Update" : "Simpan"} barang ${form.name.trim()}?`);
+    const ok = confirm(`${editingId ? "Update" : "Simpan"} stok ${name} di ${selectedLocation.name}?`);
     if (!ok) return;
 
     try {
+      const item = await ensureItem({
+        code,
+        name,
+        category,
+        unit: form.unit.trim(),
+      });
+
       const payload = {
-        code: form.code.trim().toUpperCase(),
-        name: form.name.trim(),
-        category: form.category,
-        unit: form.unit,
-        systemStock: Number(form.systemStock || 0),
-        locationId: form.locationId || "",
-        locationName: form.locationName || "",
+        itemId: item.id,
+        itemCode: code,
+        itemName: name,
+        category,
+        unit: form.unit.trim(),
+        locationType: form.locationType,
+        locationId: selectedLocation.id,
+        locationCode: selectedLocation.code || "",
+        locationName: selectedLocation.name || "",
+        systemStock,
+        systemQty: systemStock,
         isActive: form.isActive,
-        isUsed: false,
+        isUsed: true,
       };
 
       if (editingId) {
-        await updateItem(editingId, payload);
+        await updateItemStock(editingId, payload);
       } else {
-        await createItem(payload);
+        await createItemStock(payload);
       }
 
-      await loadItems();
+      await loadPageData();
       closeForm();
     } catch (error) {
       console.error(error);
-      alert("Gagal menyimpan barang ke Firebase.");
+      alert("Gagal menyimpan stok barang ke Firebase.");
     }
   }
 
-  function handleEdit(item) {
-    setEditingId(item.id);
+  function handleEdit(row) {
+    setEditingId(row.id);
     setForm({
-      code: item.code || "",
-      name: item.name || "",
-      category: item.category || "bahan_baku",
-      unit: item.unit || "Kg",
-      systemStock: item.systemStock || "",
-      locationId: item.locationId || "",
-      locationName: item.locationName || "",
-      isActive: item.isActive ?? true,
+      code: row.itemCode || "",
+      name: row.itemName || "",
+      category: row.category || "",
+      unit: row.unit || "Kg",
+      locationType: row.locationType || "gudang",
+      locationId: row.locationId || "",
+      systemStock: row.systemStock ?? row.systemQty ?? "",
+      isActive: row.isActive ?? true,
     });
     setShowForm(true);
   }
 
-  async function handleDelete(item) {
-    if (item.isUsed) {
-      alert("Barang sudah digunakan. Tidak bisa dihapus, silakan nonaktifkan saja.");
-      return;
-    }
-
-    const ok = confirm(`Hapus barang ${item.name}?`);
+  async function handleDelete(row) {
+    const ok = confirm(`Hapus stok ${row.itemName} di ${row.locationName}?`);
     if (!ok) return;
 
     try {
-      await deleteItem(item.id);
-      await loadItems();
-      alert("Barang berhasil dihapus.");
+      await deleteItemStock(row.id);
+      await loadPageData();
+      alert("Stok barang berhasil dihapus.");
     } catch (error) {
       console.error(error);
-      alert("Gagal menghapus barang dari Firebase.");
+      alert("Gagal menghapus stok barang dari Firebase.");
     }
   }
 
-  async function handleToggleActive(item) {
+  async function handleToggleActive(row) {
     const ok = confirm(
-      `Yakin ingin ${item.isActive ? "nonaktifkan" : "aktifkan"} ${item.name}?`
+      `Yakin ingin ${row.isActive ? "nonaktifkan" : "aktifkan"} stok ${row.itemName} di ${row.locationName}?`
     );
     if (!ok) return;
 
     try {
-      await updateItem(item.id, {
-        ...item,
-        isActive: !item.isActive,
+      await updateItemStock(row.id, {
+        ...row,
+        isActive: !row.isActive,
       });
 
-      await loadItems();
+      await loadPageData();
     } catch (error) {
       console.error(error);
-      alert("Gagal mengubah status barang.");
+      alert("Gagal mengubah status stok barang.");
     }
   }
 
   function downloadTemplate() {
     const rows = [
       {
-        Kode: "BB001",
-        Nama: "Jagung",
-        Kategori: "bahan_baku",
+        KodeItem: "BK001",
+        NamaItem: "Bekatul",
+        Kategori: "pakan",
         Satuan: "Kg",
-        StokSistem: 0,
-        Lokasi: "Gudang Utama",
+        LokasiTipe: "gudang",
+        KodeLokasi: "GP001",
+        NamaLokasi: "Gudang Pakan",
+        StokSistem: 1000,
       },
       {
-        Kode: "PF001",
-        Nama: "Pakan Jadi Layer",
-        Kategori: "pakan_jadi",
+        KodeItem: "BK001",
+        NamaItem: "Bekatul",
+        Kategori: "pakan",
         Satuan: "Kg",
-        StokSistem: 0,
-        Lokasi: "Gudang Pakan",
+        LokasiTipe: "kandang",
+        KodeLokasi: "KD001",
+        NamaLokasi: "Kandang A",
+        StokSistem: 120,
       },
       {
-        Kode: "OB001",
-        Nama: "Vitamin A",
+        KodeItem: "OB001",
+        NamaItem: "Vitamin A",
         Kategori: "obat",
         Satuan: "Botol",
-        StokSistem: 0,
-        Lokasi: "Gudang Obat",
+        LokasiTipe: "gudang",
+        KodeLokasi: "GO001",
+        NamaLokasi: "Gudang Obat",
+        StokSistem: 25,
       },
     ];
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Template Barang");
-    XLSX.writeFile(workbook, "template_import_barang.xlsx");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Template Stok Barang");
+    XLSX.writeFile(workbook, "template_import_stok_barang.xlsx");
   }
 
   async function handleImportExcel(e) {
@@ -267,8 +331,7 @@ function ItemsPage() {
         return;
       }
 
-      const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
       if (!rows.length) {
@@ -277,13 +340,19 @@ function ItemsPage() {
       }
 
       if (rows.length > MAX_IMPORT_ROWS) {
-        alert(
-          `Import gagal. Maksimal ${MAX_IMPORT_ROWS} baris sekali import. File ini berisi ${rows.length} baris.`
-        );
+        alert(`Import gagal. Maksimal ${MAX_IMPORT_ROWS} baris sekali import.`);
         return;
       }
 
-      const requiredHeaders = ["Kode", "Nama", "Kategori", "Satuan", "StokSistem"];
+      const requiredHeaders = [
+        "KodeItem",
+        "NamaItem",
+        "Kategori",
+        "Satuan",
+        "LokasiTipe",
+        "NamaLokasi",
+        "StokSistem",
+      ];
       const firstRow = rows[0] || {};
       const missingHeaders = requiredHeaders.filter((header) => !(header in firstRow));
 
@@ -291,45 +360,64 @@ function ItemsPage() {
         alert(
           `Import gagal. Header Excel tidak sesuai.\n\nHeader wajib:\n${requiredHeaders.join(
             " | "
-          )}\n\nHeader yang hilang:\n${missingHeaders.join(", ")}`
+          )}\n\nOpsional: KodeLokasi\n\nHeader yang hilang:\n${missingHeaders.join(", ")}`
         );
         return;
       }
 
-      const existingCodes = new Set(items.map((item) => String(item.code || "").toLowerCase()));
-      const importedCodes = new Set();
-
-      const successRows = [];
+      const itemMap = new Map(
+        items.map((item) => [String(item.code || "").toLowerCase(), item])
+      );
+      const stockMap = new Map(
+        itemStocks.map((stock) => [
+          makeStockKey(stock.itemCode, stock.locationType, stock.locationId),
+          stock,
+        ])
+      );
+      const importedStockKeys = new Set();
+      const validRows = [];
       const failedRows = [];
 
       rows.forEach((row, index) => {
         const rowNumber = index + 2;
-
-        const code = String(row.Kode || "").trim().toUpperCase();
-        const name = String(row.Nama || "").trim();
-        const category = normalizeCategory(row.Kategori);
+        const code = String(row.KodeItem || "").trim().toUpperCase();
+        const name = String(row.NamaItem || "").trim();
+        const category = String(row.Kategori || "").trim();
         const unit = String(row.Satuan || "Kg").trim();
+        const locationType = normalizeLocationType(row.LokasiTipe);
+        const locationCode = String(row.KodeLokasi || "").trim();
+        const locationName = String(row.NamaLokasi || "").trim();
         const systemStock = Number(row.StokSistem || 0);
-        const locationName = String(row.Lokasi || "").trim();
-
-        const selectedLocation = locationName
-  ? locations.find(
-      (item) => String(item.name || "").toLowerCase() === locationName.toLowerCase()
-    )
-  : null;
+        const selectedLocation = findImportLocation({
+          locationType,
+          locationCode,
+          locationName,
+          locations,
+          cages,
+        });
 
         let reason = "";
 
-        if (!code) reason = "Kode kosong";
-        else if (!name) reason = "Nama kosong";
-        else if (existingCodes.has(code.toLowerCase())) reason = "Kode sudah ada di sistem";
-        else if (importedCodes.has(code.toLowerCase())) reason = "Kode duplikat di file Excel";
-        else if (!["bahan_baku", "pakan_jadi", "obat", "telur", "ayam", "lainnya"].includes(category)) {
-          reason = "Kategori tidak valid";
+        if (!code) reason = "KodeItem kosong";
+        else if (!name) reason = "NamaItem kosong";
+        else if (!category) reason = "Kategori kosong";
+        else if (!unit) reason = "Satuan kosong";
+        else if (!["gudang", "kandang"].includes(locationType)) {
+          reason = "LokasiTipe wajib gudang atau kandang";
+        } else if (!locationName && !locationCode) {
+          reason = "NamaLokasi atau KodeLokasi wajib diisi";
+        } else if (!selectedLocation) {
+          reason =
+            locationType === "kandang"
+              ? "Kandang tidak ditemukan di master kandang"
+              : "Lokasi tidak ditemukan di master lokasi";
         } else if (Number.isNaN(systemStock)) {
-          reason = "Stok sistem bukan angka";
-        } else if (locationName && !selectedLocation) {
-          reason = "Lokasi tidak ditemukan di master lokasi";
+          reason = "StokSistem bukan angka";
+        } else {
+          const stockKey = makeStockKey(code, locationType, selectedLocation.id);
+          if (importedStockKeys.has(stockKey)) {
+            reason = "Duplikat item dan lokasi di file Excel";
+          }
         }
 
         if (reason) {
@@ -337,47 +425,82 @@ function ItemsPage() {
             row: rowNumber,
             code: code || "-",
             name: name || "-",
+            location: locationName || locationCode || "-",
             reason,
           });
           return;
         }
 
-        importedCodes.add(code.toLowerCase());
+        const stockKey = makeStockKey(code, locationType, selectedLocation.id);
+        importedStockKeys.add(stockKey);
 
-        successRows.push({
+        validRows.push({
           row: rowNumber,
           code,
           name,
           category,
           unit,
+          locationType,
+          location: selectedLocation,
           systemStock,
-          locationId: selectedLocation?.id || "",
-locationName: selectedLocation?.name || "",
-          isActive: true,
-          isUsed: false,
+          stockKey,
         });
       });
 
       const savedRows = [];
 
-      for (const row of successRows) {
-        const { row: rowNumber, ...payload } = row;
-
+      for (const row of validRows) {
         try {
-          await createItem(payload);
+          const item = await ensureItem(
+            {
+              code: row.code,
+              name: row.name,
+              category: row.category,
+              unit: row.unit,
+            },
+            Array.from(itemMap.values())
+          );
+          itemMap.set(row.code.toLowerCase(), item);
+
+          const payload = {
+            itemId: item.id,
+            itemCode: row.code,
+            itemName: row.name,
+            category: row.category,
+            unit: row.unit,
+            locationType: row.locationType,
+            locationId: row.location.id,
+            locationCode: row.location.code || "",
+            locationName: row.location.name || "",
+            systemStock: row.systemStock,
+            systemQty: row.systemStock,
+            isActive: true,
+            isUsed: true,
+          };
+
+          const existingStock = stockMap.get(row.stockKey);
+          if (existingStock) {
+            await updateItemStock(existingStock.id, payload);
+            stockMap.set(row.stockKey, { ...existingStock, ...payload });
+          } else {
+            const ref = await createItemStock(payload);
+            stockMap.set(row.stockKey, { id: ref.id, ...payload });
+          }
+
           savedRows.push(row);
         } catch (error) {
-          console.error(`Gagal import barang baris ${rowNumber}:`, error);
+          console.error(`Gagal import stok barang baris ${row.row}:`, error);
           failedRows.push({
-            row: rowNumber,
+            row: row.row,
             code: row.code || "-",
             name: row.name || "-",
+            location: row.location?.name || "-",
             reason: getFirebaseErrorMessage(error),
           });
         }
       }
 
-      await loadItems();
+      await loadPageData();
 
       const result = {
         totalRows: rows.length,
@@ -391,7 +514,7 @@ locationName: selectedLocation?.name || "",
       alert(
         `Import selesai.\n\n` +
           `Total baris dibaca: ${result.totalRows}\n` +
-          `Berhasil masuk: ${result.successCount}\n` +
+          `Berhasil dibuat/update: ${result.successCount}\n` +
           `Gagal masuk: ${result.failedCount}\n\n` +
           (result.failedCount > 0
             ? `Contoh gagal:\nBaris ${result.failedRows[0].row}: ${result.failedRows[0].reason}`
@@ -412,7 +535,7 @@ locationName: selectedLocation?.name || "",
       <div className="page-header page-header-row">
         <div>
           <h1>Barang</h1>
-          <p>Kelola bahan baku pakan, pakan jadi, obat, dan stok sistem.</p>
+          <p>Kelola master item dan stok sistem per gudang atau kandang.</p>
         </div>
 
         <div className="page-actions">
@@ -436,7 +559,7 @@ locationName: selectedLocation?.name || "",
           />
 
           <button className="primary-button" onClick={openAddForm}>
-            + Tambah Barang
+            + Tambah Stok Barang
           </button>
         </div>
       </div>
@@ -463,18 +586,20 @@ locationName: selectedLocation?.name || "",
       </div>
 
       <div className="table-card">
-        <h3>Daftar Barang</h3>
+        <h3>Daftar Stok Barang per Lokasi</h3>
 
         <table className="data-table">
           <thead>
             <tr>
               <th>No</th>
-              <th>Kode</th>
-              <th>Nama Barang</th>
+              <th>Kode Item</th>
+              <th>Nama Item</th>
               <th>Kategori</th>
               <th>Satuan</th>
+              <th>Tipe Lokasi</th>
+              <th>Kode Lokasi</th>
+              <th>Nama Lokasi</th>
               <th>Stok Sistem</th>
-              <th>Lokasi</th>
               <th>Status</th>
               <th>Aksi</th>
             </tr>
@@ -483,47 +608,42 @@ locationName: selectedLocation?.name || "",
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="9">Mengambil data...</td>
+                <td colSpan="11">Mengambil data...</td>
               </tr>
-            ) : filteredItems.length === 0 ? (
+            ) : filteredRows.length === 0 ? (
               <tr>
-                <td colSpan="9">Tidak ada data barang.</td>
+                <td colSpan="11">Tidak ada data stok barang.</td>
               </tr>
             ) : (
-              filteredItems.map((item, index) => (
-                <tr key={item.id}>
+              filteredRows.map((row, index) => (
+                <tr key={row.id}>
                   <td>{index + 1}</td>
-                  <td>{item.code}</td>
-                  <td>{item.name}</td>
-                  <td>{labelCategory(item.category)}</td>
-                  <td>{item.unit}</td>
-                  <td>{Number(item.systemStock || 0).toLocaleString("id-ID")}</td>
-                  <td>{item.locationName || "-"}</td>
+                  <td>{row.itemCode}</td>
+                  <td>{row.itemName}</td>
+                  <td>{row.category || "-"}</td>
+                  <td>{row.unit}</td>
+                  <td>{labelLocationType(row.locationType)}</td>
+                  <td>{row.locationCode || "-"}</td>
+                  <td>{row.locationName || "-"}</td>
+                  <td>{formatNumber(row.systemStock ?? row.systemQty)}</td>
                   <td>
-                    <span className={item.isActive ? "badge green" : "badge gray"}>
-                      {item.isActive ? "Aktif" : "Nonaktif"}
+                    <span className={row.isActive ? "badge green" : "badge gray"}>
+                      {row.isActive ? "Aktif" : "Nonaktif"}
                     </span>
                   </td>
                   <td>
-                    <button className="table-button" onClick={() => handleEdit(item)}>
+                    <button className="table-button" onClick={() => handleEdit(row)}>
                       Edit
                     </button>
-
                     <button
                       className="table-button warning"
-                      onClick={() => handleToggleActive(item)}
+                      onClick={() => handleToggleActive(row)}
                     >
-                      {item.isActive ? "Nonaktif" : "Aktifkan"}
+                      {row.isActive ? "Nonaktif" : "Aktifkan"}
                     </button>
-
-                    {!item.isUsed && (
-                      <button
-                        className="table-button danger"
-                        onClick={() => handleDelete(item)}
-                      >
-                        Hapus
-                      </button>
-                    )}
+                    <button className="table-button danger" onClick={() => handleDelete(row)}>
+                      Hapus
+                    </button>
                   </td>
                 </tr>
               ))
@@ -542,6 +662,7 @@ locationName: selectedLocation?.name || "",
                 <th>Baris Excel</th>
                 <th>Kode</th>
                 <th>Nama</th>
+                <th>Lokasi</th>
                 <th>Alasan</th>
               </tr>
             </thead>
@@ -551,6 +672,7 @@ locationName: selectedLocation?.name || "",
                   <td>{item.row}</td>
                   <td>{item.code}</td>
                   <td>{item.name}</td>
+                  <td>{item.location}</td>
                   <td>{item.reason}</td>
                 </tr>
               ))}
@@ -563,61 +685,69 @@ locationName: selectedLocation?.name || "",
         <div className="modal-backdrop">
           <div className="modal-card">
             <div className="modal-header">
-              <h3>{editingId ? "Edit Barang" : "Tambah Barang"}</h3>
-              <button type="button" onClick={closeForm}>×</button>
+              <h3>{editingId ? "Edit Stok Barang" : "Tambah Stok Barang"}</h3>
+              <button type="button" onClick={closeForm}>x</button>
             </div>
 
             <form onSubmit={handleSubmit} className="form-grid">
               <div className="form-group">
-                <label>Kode Barang</label>
+                <label>Kode Item</label>
                 <input
                   name="code"
                   value={form.code}
                   onChange={handleChange}
-                  placeholder="Contoh: BB001"
+                  placeholder="Contoh: BK001"
                 />
               </div>
 
               <div className="form-group">
-                <label>Nama Barang</label>
+                <label>Nama Item</label>
                 <input
                   name="name"
                   value={form.name}
                   onChange={handleChange}
-                  placeholder="Contoh: Jagung"
+                  placeholder="Contoh: Bekatul"
                 />
               </div>
 
               <div className="form-group">
                 <label>Kategori</label>
-                <select name="category" value={form.category} onChange={handleChange}>
-  <option value="bahan_baku">Bahan Baku Pakan</option>
-  <option value="pakan_jadi">Pakan Jadi</option>
-  <option value="obat">Obat-obatan</option>
-  <option value="telur">Telur</option>
-  <option value="ayam">Ayam</option>
-  <option value="lainnya">Lainnya</option>
-</select>
+                <input
+                  name="category"
+                  value={form.category}
+                  onChange={handleChange}
+                  placeholder="Contoh: pakan"
+                />
               </div>
 
               <div className="form-group">
                 <label>Satuan</label>
-                <select name="unit" value={form.unit} onChange={handleChange}>
-  <option value="Kg">Kg</option>
-  <option value="Gram">Gram</option>
-  <option value="Karung">Karung</option>
-  <option value="Sak">Sak</option>
-  <option value="Botol">Botol</option>
-  <option value="Sachet">Sachet</option>
-  <option value="Pcs">Pcs</option>
+                <input
+                  name="unit"
+                  value={form.unit}
+                  onChange={handleChange}
+                  placeholder="Contoh: Kg"
+                />
+              </div>
 
-  <option value="Butir">Butir</option>
-  <option value="Ikat">Ikat</option>
-  <option value="Tray">Tray</option>
-  <option value="Peti">Peti</option>
+              <div className="form-group">
+                <label>Tipe Lokasi</label>
+                <select name="locationType" value={form.locationType} onChange={handleChange}>
+                  <option value="gudang">Gudang</option>
+                  <option value="kandang">Kandang</option>
+                </select>
+              </div>
 
-  <option value="Ekor">Ekor</option>
-</select>
+              <div className="form-group">
+                <label>Lokasi</label>
+                <select name="locationId" value={form.locationId} onChange={handleChange}>
+                  <option value="">Pilih Lokasi</option>
+                  {filteredLocationOptions.map((item) => (
+                    <option key={`${item.locationType}-${item.id}`} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="form-group">
@@ -629,22 +759,6 @@ locationName: selectedLocation?.name || "",
                   onChange={handleChange}
                   placeholder="Contoh: 1000"
                 />
-              </div>
-
-              <div className="form-group">
-              <label>Lokasi Default (Opsional)</label>
-                <select
-                  name="locationId"
-                  value={form.locationId}
-                  onChange={handleChange}
-                >
-                  <option value="">Tanpa Lokasi Default</option>
-                  {locations.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name} - {labelLocationType(item.type)}
-                    </option>
-                  ))}
-                </select>
               </div>
 
               <label className="checkbox-row">
@@ -662,7 +776,7 @@ locationName: selectedLocation?.name || "",
                   Batal
                 </button>
                 <button type="submit" className="primary-button">
-                  {editingId ? "Update Barang" : "Simpan Barang"}
+                  {editingId ? "Update Stok" : "Simpan Stok"}
                 </button>
               </div>
             </form>
@@ -673,50 +787,45 @@ locationName: selectedLocation?.name || "",
   );
 }
 
-function normalizeCategory(value) {
+function normalizeLocationType(value) {
   const raw = String(value || "").trim().toLowerCase();
 
-  if (raw === "bahan_baku" || raw === "bahan baku" || raw === "bahan baku pakan") {
-    return "bahan_baku";
-  }
-
-  if (raw === "pakan_jadi" || raw === "pakan jadi") {
-    return "pakan_jadi";
-  }
-
-  if (raw === "obat" || raw === "obat-obatan" || raw === "obat obatan") {
-    return "obat";
-  }
-
-  if (raw === "telur" || raw === "egg") {
-    return "telur";
-  }
-
-  if (raw === "ayam" || raw === "chicken") {
-    return "ayam";
-  }
-
-  if (raw === "lainnya" || raw === "lain-lain" || raw === "lain lain") {
-    return "lainnya";
-  }
+  if (["gudang", "warehouse", "lokasi"].includes(raw)) return "gudang";
+  if (["kandang", "cage"].includes(raw)) return "kandang";
 
   return raw;
 }
 
-function labelCategory(category) {
-  const labels = {
-    bahan_baku: "Bahan Baku Pakan",
-    pakan_jadi: "Pakan Jadi",
-    obat: "Obat-obatan",
-    telur: "Telur",
-    ayam: "Ayam",
-    lainnya: "Lainnya",
-  };
+function findImportLocation({ locationType, locationCode, locationName, locations, cages }) {
+  const source = locationType === "kandang" ? cages : locations;
+  const code = locationCode.toLowerCase();
+  const name = locationName.toLowerCase();
 
-  return labels[category] || category;
+  return source.find((item) => {
+    const sameCode = code && String(item.code || "").toLowerCase() === code;
+    const sameName = name && String(item.name || "").toLowerCase() === name;
+    return sameCode || sameName;
+  });
+}
+
+function makeStockKey(itemCode, locationType, locationId) {
+  return [
+    String(itemCode || "").toLowerCase(),
+    String(locationType || "").toLowerCase(),
+    String(locationId || ""),
+  ].join("__");
 }
 
 function labelLocationType(type) {
+  const labels = {
+    gudang: "Gudang",
+    kandang: "Kandang",
+  };
+
+  return labels[type] || type || "-";
+}
+
+function labelWarehouseType(type) {
   const labels = {
     gudang_utama: "Gudang Utama",
     gudang_pakan: "Gudang Pakan",
@@ -727,18 +836,22 @@ function labelLocationType(type) {
     lainnya: "Lainnya",
   };
 
-  return labels[type] || type;
+  return labels[type] || type || "-";
+}
+
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString("id-ID");
 }
 
 function getFirebaseErrorMessage(error) {
   const code = error?.code || "";
 
   const messages = {
-    "permission-denied": "Ditolak Firebase: akun tidak punya izin menambah barang",
-    "unavailable": "Firebase tidak tersedia atau koneksi internet bermasalah",
+    "permission-denied": "Ditolak Firebase: akun tidak punya izin menyimpan stok barang",
+    unavailable: "Firebase tidak tersedia atau koneksi internet bermasalah",
     "deadline-exceeded": "Koneksi ke Firebase terlalu lama, silakan coba lagi",
     "resource-exhausted": "Kuota Firebase habis atau terlalu banyak request",
-    "unauthenticated": "Sesi login tidak valid, silakan login ulang",
+    unauthenticated: "Sesi login tidak valid, silakan login ulang",
     "invalid-argument": "Data ditolak Firebase karena format tidak valid",
   };
 

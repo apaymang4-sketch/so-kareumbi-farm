@@ -97,20 +97,46 @@ export async function approveMasterChangeRequest(request) {
 
   if (request.requestType === "item_add") {
     const payload = request.payload || {};
+    const itemCode = makeItemCode(payload.name);
+    const itemName = String(payload.name || "").trim();
+    const locationType = normalizeLocationType(
+      payload.locationType || request.locationType || request.targetType
+    );
+    const locationId = payload.locationId || request.locationId || request.targetId || "";
+    const locationName = payload.locationName || request.locationName || request.targetName || "";
+
     const itemRef = await addDoc(collection(db, "items"), {
-      code: makeItemCode(payload.name),
-      name: String(payload.name || "").trim(),
+      code: itemCode,
+      name: itemName,
       category: payload.category || "lainnya",
       unit: payload.unit || "",
-      systemStock: 0,
-      locationId: payload.locationId || request.locationId || "",
-      locationName: payload.locationName || request.locationName || "",
       isActive: true,
-      isUsed: false,
+      isUsed: true,
       source: "android_field",
       createdAt: now,
       updatedAt: now,
     });
+
+    if (locationId) {
+      await addDoc(collection(db, "item_stocks"), {
+        itemId: itemRef.id,
+        itemCode,
+        itemName,
+        category: payload.category || "lainnya",
+        unit: payload.unit || "",
+        locationType,
+        locationId,
+        locationCode: payload.locationCode || request.locationCode || "",
+        locationName,
+        systemStock: Number(payload.systemStock || payload.systemQty || 0),
+        systemQty: Number(payload.systemStock || payload.systemQty || 0),
+        isActive: true,
+        isUsed: true,
+        source: "android_field",
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
 
     await updateStockCountRequestStatus(request.stockCountId, {
       itemId: itemRef.id,
@@ -182,4 +208,12 @@ function makeItemCode(name) {
     .slice(0, 18);
 
   return `${base || "ITEM"}_${Date.now().toString().slice(-6)}`;
+}
+
+function normalizeLocationType(value) {
+  const raw = String(value || "").trim().toLowerCase();
+
+  if (raw === "kandang") return "kandang";
+
+  return "gudang";
 }

@@ -1,56 +1,46 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-const assignments = [
-  {
-    id: "A001",
-    sessionName: "Opname Juni 2026",
-    locationName: "Gudang Utama",
-    taskType: "gudang",
-    userName: "Petugas Gudang",
-  },
-  {
-    id: "A002",
-    sessionName: "Opname Juni 2026",
-    locationName: "Gudang Pakan",
-    taskType: "gudang",
-    userName: "Petugas Gudang",
-  },
-];
-
-const items = [
-  {
-    id: "I001",
-    code: "BB001",
-    name: "Jagung",
-    category: "Bahan Baku Pakan",
-    unit: "Kg",
-    systemStock: 1000,
-    locationName: "Gudang Utama",
-  },
-  {
-    id: "I002",
-    code: "BB002",
-    name: "Dedak",
-    category: "Bahan Baku Pakan",
-    unit: "Kg",
-    systemStock: 500,
-    locationName: "Gudang Utama",
-  },
-  {
-    id: "I003",
-    code: "PF001",
-    name: "Pakan Jadi Layer",
-    category: "Pakan Jadi",
-    unit: "Kg",
-    systemStock: 800,
-    locationName: "Gudang Pakan",
-  },
-];
+import { getAssignments, updateAssignment } from "../../services/assignmentService";
+import { createStockCount } from "../../services/countService";
+import { getItemStocks } from "../../services/itemStockService";
 
 function WarehouseInputPage() {
+  const [assignments, setAssignments] = useState([]);
+  const [itemStocks, setItemStocks] = useState([]);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
   const [counts, setCounts] = useState({});
   const [savedRows, setSavedRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  async function loadData() {
+    try {
+      setLoading(true);
+      const [assignmentData, stockData] = await Promise.all([
+        getAssignments(),
+        getItemStocks(),
+      ]);
+
+      setAssignments(
+        assignmentData.filter(
+          (item) =>
+            item.taskType === "gudang" &&
+            item.status !== "selesai" &&
+            item.status !== "perlu_cek"
+        )
+      );
+      setItemStocks(stockData.filter((item) => item.isActive !== false));
+    } catch (error) {
+      console.error(error);
+      alert("Gagal mengambil data input gudang dari Firebase.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const selectedAssignment = assignments.find(
     (item) => item.id === selectedAssignmentId
@@ -59,10 +49,15 @@ function WarehouseInputPage() {
   const filteredItems = useMemo(() => {
     if (!selectedAssignment) return [];
 
-    return items.filter(
-      (item) => item.locationName === selectedAssignment.locationName
+    const stockLocationType =
+      selectedAssignment.targetType === "kandang" ? "kandang" : "gudang";
+
+    return itemStocks.filter(
+      (item) =>
+        item.locationType === stockLocationType &&
+        item.locationId === selectedAssignment.targetId
     );
-  }, [selectedAssignment]);
+  }, [selectedAssignment, itemStocks]);
 
   function handlePhysicalChange(itemId, value) {
     setCounts((prev) => ({
@@ -71,7 +66,7 @@ function WarehouseInputPage() {
     }));
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!selectedAssignment) {
       alert("Pilih assignment gudang dulu.");
       return;
@@ -82,34 +77,60 @@ function WarehouseInputPage() {
       return;
     }
 
-    const rows = filteredItems.map((item) => {
-      const physicalStock = Number(counts[item.id] || 0);
+    const ok = confirm(`Simpan hasil hitung ${selectedAssignment.targetName}?`);
+    if (!ok) return;
 
-      return {
-        id: `${selectedAssignment.id}-${item.id}`,
-        sessionName: selectedAssignment.sessionName,
-        locationName: selectedAssignment.locationName,
-        itemCode: item.code,
-        itemName: item.name,
-        category: item.category,
-        systemStock: item.systemStock,
-        physicalStock,
-        difference: physicalStock - item.systemStock,
-        unit: item.unit,
-        countedBy: selectedAssignment.userName,
-      };
-    });
+    try {
+      setSaving(true);
 
-    setSavedRows((prev) => {
-      const withoutSameAssignment = prev.filter(
-        (row) =>
-          !rows.some((newRow) => newRow.id === row.id)
-      );
+      const rows = filteredItems.map((item) => {
+        const countedQty = Number(counts[item.id] || 0);
+        const systemQty = Number(item.systemStock ?? item.systemQty ?? 0);
 
-      return [...rows, ...withoutSameAssignment];
-    });
+        return {
+          assignmentId: selectedAssignment.id,
+          sessionId: selectedAssignment.sessionId || "",
+          sessionName: selectedAssignment.sessionName || "",
+          sessionDate: selectedAssignment.sessionDate || "",
+          type: "gudang",
+          locationId: selectedAssignment.targetId || item.locationId || "",
+          locationName: selectedAssignment.targetName || item.locationName || "",
+          locationType: selectedAssignment.targetType || "lokasi",
+          itemStockId: item.id,
+          itemId: item.itemId || "",
+          itemCode: item.itemCode || "",
+          itemName: item.itemName || "",
+          category: item.category || "",
+          systemQty,
+          countedQty,
+          unit: item.unit || "",
+          difference: countedQty - systemQty,
+          countedBy: selectedAssignment.userName || "",
+          countedAt: new Date().toISOString(),
+          status: "menunggu_review",
+        };
+      });
 
-    alert("Input gudang berhasil disimpan.");
+      for (const row of rows) {
+        await createStockCount(row);
+      }
+
+      await updateAssignment(selectedAssignment.id, {
+        ...selectedAssignment,
+        status: "selesai",
+        progress: 100,
+      });
+
+      setSavedRows((prev) => [...rows, ...prev]);
+      setCounts({});
+      await loadData();
+      alert("Input gudang berhasil disimpan.");
+    } catch (error) {
+      console.error(error);
+      alert("Gagal menyimpan input gudang.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -117,12 +138,15 @@ function WarehouseInputPage() {
       <div className="page-header page-header-row">
         <div>
           <h1>Input Gudang</h1>
-          <p>Input hasil hitung fisik bahan baku, pakan jadi, dan obat.</p>
+          <p>Input hasil hitung fisik berdasarkan stok barang per lokasi.</p>
         </div>
 
         <div className="page-actions">
-          <button className="primary-button" onClick={handleSave}>
-            Simpan Hitung
+          <button className="secondary-button" onClick={loadData} disabled={loading || saving}>
+            Refresh
+          </button>
+          <button className="primary-button" onClick={handleSave} disabled={saving}>
+            {saving ? "Menyimpan..." : "Simpan Hitung"}
           </button>
         </div>
       </div>
@@ -140,7 +164,7 @@ function WarehouseInputPage() {
             <option value="">Pilih Assignment</option>
             {assignments.map((item) => (
               <option key={item.id} value={item.id}>
-                {item.sessionName} - {item.locationName} - {item.userName}
+                {item.sessionName} - {item.targetName} - {item.userName}
               </option>
             ))}
           </select>
@@ -164,25 +188,30 @@ function WarehouseInputPage() {
           </thead>
 
           <tbody>
-            {!selectedAssignment ? (
+            {loading ? (
+              <tr>
+                <td colSpan="7">Mengambil data...</td>
+              </tr>
+            ) : !selectedAssignment ? (
               <tr>
                 <td colSpan="7">Pilih assignment gudang terlebih dahulu.</td>
               </tr>
             ) : filteredItems.length === 0 ? (
               <tr>
-                <td colSpan="7">Tidak ada barang untuk lokasi ini.</td>
+                <td colSpan="7">Tidak ada stok barang untuk lokasi ini.</td>
               </tr>
             ) : (
               filteredItems.map((item) => {
-                const physicalStock = Number(counts[item.id] || 0);
-                const difference = physicalStock - item.systemStock;
+                const systemQty = Number(item.systemStock ?? item.systemQty ?? 0);
+                const countedQty = Number(counts[item.id] || 0);
+                const difference = countedQty - systemQty;
 
                 return (
                   <tr key={item.id}>
-                    <td>{item.code}</td>
-                    <td>{item.name}</td>
-                    <td>{item.category}</td>
-                    <td>{formatNumber(item.systemStock)}</td>
+                    <td>{item.itemCode}</td>
+                    <td>{item.itemName}</td>
+                    <td>{item.category || "-"}</td>
+                    <td>{formatNumber(systemQty)}</td>
                     <td>
                       <input
                         className="table-input"
@@ -209,7 +238,7 @@ function WarehouseInputPage() {
       </div>
 
       <div className="table-card">
-        <h3>Data Tersimpan Sementara</h3>
+        <h3>Data Baru Disimpan</h3>
 
         <table className="data-table">
           <thead>
@@ -227,16 +256,16 @@ function WarehouseInputPage() {
           <tbody>
             {savedRows.length === 0 ? (
               <tr>
-                <td colSpan="7">Belum ada data tersimpan.</td>
+                <td colSpan="7">Belum ada data baru disimpan.</td>
               </tr>
             ) : (
-              savedRows.map((item) => (
-                <tr key={item.id}>
+              savedRows.map((item, index) => (
+                <tr key={`${item.assignmentId}-${item.itemStockId}-${index}`}>
                   <td>{item.sessionName}</td>
                   <td>{item.locationName}</td>
                   <td>{item.itemName}</td>
-                  <td>{formatNumber(item.systemStock)}</td>
-                  <td>{formatNumber(item.physicalStock)}</td>
+                  <td>{formatNumber(item.systemQty)}</td>
+                  <td>{formatNumber(item.countedQty)}</td>
                   <td>
                     <span className={item.difference === 0 ? "badge green" : "badge red"}>
                       {formatNumber(item.difference)}
