@@ -147,7 +147,9 @@ export async function approveMasterChangeRequest(request) {
   if (request.requestType === "item_remove") {
     if (!request.targetId) throw new Error("ID item master tidak ditemukan.");
 
-    await updateDoc(doc(db, "items", request.targetId), {
+    const targetCollection = request.targetCollection || "items";
+
+    await updateDoc(doc(db, targetCollection, request.targetId), {
       isActive: false,
       updatedAt: now,
     });

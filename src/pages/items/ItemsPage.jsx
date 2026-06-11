@@ -833,6 +833,7 @@ function labelWarehouseType(type) {
     gudang_telur: "Gudang Telur",
     area_sortir: "Area Sortir",
     area_transit: "Area Transit",
+    kandang: "Kandang",
     lainnya: "Lainnya",
   };
 

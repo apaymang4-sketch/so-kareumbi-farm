@@ -309,6 +309,7 @@ function LocationsPage() {
                   <option value="gudang_telur">Gudang Telur</option>
                   <option value="area_sortir">Area Sortir</option>
                   <option value="area_transit">Area Transit</option>
+                  <option value="kandang">Kandang</option>
                   <option value="lainnya">Lainnya</option>
                 </select>
               </div>

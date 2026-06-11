@@ -95,21 +95,7 @@ function AssignmentsPage() {
         }${item.totalPopulation ? ` - ${formatNumber(item.totalPopulation)} ekor` : ""}`,
       }));
 
-    if (form.taskType === "gudang") return [...activeLocations, ...activeCages];
-
-    if (form.taskType === "telur") {
-      return [...activeLocations, ...activeCages];
-    }
-
-    if (
-      form.taskType === "ayam_hidup" ||
-      form.taskType === "ayam_mati" ||
-      form.taskType === "ayam_upkir"
-    ) {
-      return activeCages;
-    }
-
-    return [];
+    return [...activeLocations, ...activeCages];
   }, [form.taskType, locations, cages]);
 
   const filteredAssignments = useMemo(() => {
