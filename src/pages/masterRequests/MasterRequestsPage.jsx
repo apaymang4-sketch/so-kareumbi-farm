@@ -200,13 +200,24 @@ function statusBadge(status) {
 function formatDateTime(value) {
   if (!value) return "-";
 
-  return new Date(value).toLocaleString("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  let date;
+  if (value && typeof value.toDate === "function") {
+    date = value.toDate();
+  } else if (value && typeof value === "object" && value.seconds) {
+    date = new Date(value.seconds * 1000);
+  } else {
+    date = new Date(value);
+  }
+
+  if (isNaN(date.getTime())) return "-";
+
+  const day = date.getDate().toString().padStart(2, "0");
+  const month = date.toLocaleString("id-ID", { month: "short" });
+  const year = date.getFullYear();
+  const hours = date.getHours().toString().padStart(2, "0");
+  const minutes = date.getMinutes().toString().padStart(2, "0");
+
+  return `${day} ${month} ${year} ${hours}:${minutes}`;
 }
 
 export default MasterRequestsPage;
