@@ -11,6 +11,9 @@ const emptyCorrection = {
 };
 
 function ReviewPage() {
+  const currentUser = JSON.parse(localStorage.getItem("so_user")) || {};
+  const isAdmin = currentUser.role === "admin";
+
   const [rows, setRows] = useState([]);
   const [selectedSession, setSelectedSession] = useState("semua");
   const [selectedPetugas, setSelectedPetugas] = useState("semua");
@@ -93,6 +96,11 @@ function ReviewPage() {
   }
 
   async function approveRow(item) {
+    if (!isAdmin) {
+      alert("Hanya Admin yang dapat menyetujui data.");
+      return;
+    }
+
     const ok = confirm(`Setujui data ${item.itemName}?`);
     if (!ok) return;
 
@@ -106,7 +114,7 @@ function ReviewPage() {
             if (child.assignmentId) assignmentIds.add(child.assignmentId);
             return updateStockCount(child.id, {
               status: "disetujui",
-              reviewedBy: "Admin",
+              reviewedBy: currentUser.name || "Admin",
               reviewedAt: new Date().toISOString(),
             });
           })
@@ -114,7 +122,7 @@ function ReviewPage() {
       } else {
         await updateStockCount(item.id, {
           status: "disetujui",
-          reviewedBy: "Admin",
+          reviewedBy: currentUser.name || "Admin",
           reviewedAt: new Date().toISOString(),
         });
       }
@@ -142,6 +150,11 @@ function ReviewPage() {
   }
 
   async function markRecount(item) {
+    if (!isAdmin) {
+      alert("Hanya Admin yang dapat meminta hitung ulang.");
+      return;
+    }
+
     const ok = confirm(`Hapus hasil input lama dan minta hitung ulang untuk ${item.locationName}?`);
     if (!ok) return;
 
@@ -189,6 +202,11 @@ function ReviewPage() {
   }
 
   function openCorrection(item) {
+    if (!isAdmin) {
+      alert("Hanya Admin yang dapat melakukan koreksi.");
+      return;
+    }
+
     if (item.isGroup) {
       alert("Koreksi ayam hidup dilakukan dari data detail per sekat, bukan total kandang.");
       return;
@@ -208,6 +226,11 @@ function ReviewPage() {
   async function saveCorrection(e) {
     e.preventDefault();
 
+    if (!isAdmin) {
+      alert("Hanya Admin yang dapat menyimpan koreksi.");
+      return;
+    }
+
     if (!correction.correctedQty && correction.correctedQty !== 0) {
       alert("Qty koreksi wajib diisi.");
       return;
@@ -226,7 +249,7 @@ function ReviewPage() {
         correctedQty: Number(correction.correctedQty),
         correctionReason: correction.correctionReason.trim(),
         status: "dikoreksi",
-        correctedBy: "Admin",
+        correctedBy: currentUser.name || "Admin",
         correctedAt: new Date().toISOString(),
       });
 
@@ -410,6 +433,7 @@ function ReviewPage() {
 
             {detailRow.isGroup ? (
               <AyamHidupGroupDetail
+                isAdmin={isAdmin}
                 row={{
                   ...detailRow,
                   onCorrection: openCorrection,
@@ -500,16 +524,28 @@ function ReviewPage() {
             )}
 
             <div className="detail-actions">
-              <button className="table-button success" onClick={() => approveRow(detailRow)}>
+              <button
+                className="table-button success"
+                onClick={() => approveRow(detailRow)}
+                disabled={!isAdmin}
+              >
                 Setujui
               </button>
 
-              <button className="table-button warning" onClick={() => markRecount(detailRow)}>
+              <button
+                className="table-button warning"
+                onClick={() => markRecount(detailRow)}
+                disabled={!isAdmin}
+              >
                 Hitung Ulang
               </button>
 
               {!detailRow.isGroup && (
-                <button className="table-button" onClick={() => openCorrection(detailRow)}>
+                <button
+                  className="table-button"
+                  onClick={() => openCorrection(detailRow)}
+                  disabled={!isAdmin}
+                >
                   Koreksi
                 </button>
               )}
@@ -560,6 +596,7 @@ function ReviewPage() {
                       correctedQty: e.target.value,
                     }))
                   }
+                  disabled={!isAdmin}
                 />
               </div>
 
@@ -574,6 +611,7 @@ function ReviewPage() {
                     }))
                   }
                   placeholder="Contoh: salah input petugas / hasil timbang ulang"
+                  disabled={!isAdmin}
                 />
               </div>
 
@@ -581,7 +619,7 @@ function ReviewPage() {
                 <button type="button" className="secondary-button" onClick={closeCorrection}>
                   Batal
                 </button>
-                <button type="submit" className="primary-button">
+                <button type="submit" className="primary-button" disabled={!isAdmin}>
                   Simpan Koreksi
                 </button>
               </div>
@@ -593,7 +631,7 @@ function ReviewPage() {
   );
 }
 
-function AyamHidupGroupDetail({ row }) {
+function AyamHidupGroupDetail({ row, isAdmin }) {
   const lorongGroups = groupByLorong(row.children || []);
 
   return (
@@ -688,6 +726,7 @@ function AyamHidupGroupDetail({ row }) {
                         e.stopPropagation();
                         row.onCorrection(item);
                       }}
+                      disabled={!isAdmin}
                     >
                       Koreksi
                     </button>
