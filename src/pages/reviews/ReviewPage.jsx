@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { getStockCounts, updateStockCount, deleteStockCount } from "../../services/countService";
 import { updateAssignment } from "../../services/assignmentService";
+import { updateStockCountReport } from "../../services/stockCountReportService";
 
 const emptyCorrection = {
   id: null,
@@ -96,15 +97,19 @@ function ReviewPage() {
     if (!ok) return;
 
     try {
+      const assignmentIds = new Set();
+      if (item.assignmentId) assignmentIds.add(item.assignmentId);
+
       if (item.isGroup && item.children?.length) {
         await Promise.all(
-          item.children.map((child) =>
-            updateStockCount(child.id, {
+          item.children.map((child) => {
+            if (child.assignmentId) assignmentIds.add(child.assignmentId);
+            return updateStockCount(child.id, {
               status: "disetujui",
               reviewedBy: "Admin",
               reviewedAt: new Date().toISOString(),
-            })
-          )
+            });
+          })
         );
       } else {
         await updateStockCount(item.id, {
@@ -112,6 +117,20 @@ function ReviewPage() {
           reviewedBy: "Admin",
           reviewedAt: new Date().toISOString(),
         });
+      }
+
+      // Update related assignment and report status
+      if (assignmentIds.size > 0) {
+        await Promise.all(
+          Array.from(assignmentIds).map(async (id) => {
+            await updateAssignment(id, { status: "disetujui" });
+            try {
+              await updateStockCountReport(id, { status: "disetujui" });
+            } catch (e) {
+              console.warn("Stock count report not found for assignment", id);
+            }
+          })
+        );
       }
 
       await loadRows();
@@ -128,6 +147,7 @@ function ReviewPage() {
 
     try {
       const assignmentIds = new Set();
+      if (item.assignmentId) assignmentIds.add(item.assignmentId);
 
       if (item.isGroup && item.children?.length) {
         await Promise.all(
@@ -138,20 +158,24 @@ function ReviewPage() {
           })
         );
       } else {
-        if (item.assignmentId) assignmentIds.add(item.assignmentId);
         // Delete record so it's fresh for the officer
         await deleteStockCount(item.id);
       }
 
-      // Reset assignment status so it appears back for the officer
+      // Reset assignment status and report so it appears back for the officer
       if (assignmentIds.size > 0) {
         await Promise.all(
-          Array.from(assignmentIds).map((id) =>
-            updateAssignment(id, {
+          Array.from(assignmentIds).map(async (id) => {
+            await updateAssignment(id, {
               status: "belum_dihitung",
               progress: 0,
-            })
-          )
+            });
+            try {
+              await updateStockCountReport(id, { status: "hitung_ulang" });
+            } catch (e) {
+              // Report might not exist yet
+            }
+          })
         );
       }
 

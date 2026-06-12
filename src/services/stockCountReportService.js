@@ -1,6 +1,8 @@
 import {
   collection,
   getDocs,
+  updateDoc,
+  doc,
   orderBy,
   query,
 } from "firebase/firestore";
@@ -17,4 +19,11 @@ export async function getStockCountReports() {
     id: item.id,
     ...item.data(),
   }));
+}
+
+export async function updateStockCountReport(id, data) {
+  return await updateDoc(doc(db, collectionName, id), {
+    ...data,
+    updatedAt: new Date().toISOString(),
+  });
 }
