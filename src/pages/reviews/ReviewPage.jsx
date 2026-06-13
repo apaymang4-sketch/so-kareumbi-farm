@@ -337,6 +337,7 @@ function ReviewPage() {
             <tr>
               <th>Lokasi</th>
               <th>Item</th>
+              <th>Petugas</th>
               <th>Sistem</th>
               <th>Hasil SO</th>
               <th>Selisih</th>
@@ -349,11 +350,11 @@ function ReviewPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="8">Mengambil data...</td>
+                <td colSpan="9">Mengambil data...</td>
               </tr>
             ) : filteredRows.length === 0 ? (
               <tr>
-                <td colSpan="8">Tidak ada data review.</td>
+                <td colSpan="9">Tidak ada data review.</td>
               </tr>
             ) : (
               filteredRows.map((item) => {
@@ -367,6 +368,9 @@ function ReviewPage() {
                     </td>
                     <td className="cell-ellipsis" title={item.itemName}>
                       {item.itemName || "-"}
+                    </td>
+                    <td className="cell-ellipsis" title={item.countedBy}>
+                      {item.countedBy || "-"}
                     </td>
                     <td>
                       {formatNumber(item.systemQty)} {item.unit}
