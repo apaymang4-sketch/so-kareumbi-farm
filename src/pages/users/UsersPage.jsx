@@ -7,6 +7,27 @@ import {
   deleteUser,
 } from "../../services/userService";
 
+import { initializeApp, getApps } from "firebase/app";
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+import { firebaseConfig } from "../../firebase/firebaseConfig";
+
+// Secondary app instance untuk buat akun baru tanpa mengganggu session admin
+function getSecondaryAuth() {
+  const secondaryAppName = "secondary";
+  const existing = getApps().find((app) => app.name === secondaryAppName);
+  const secondaryApp = existing || initializeApp(firebaseConfig, secondaryAppName);
+  return getAuth(secondaryApp);
+}
+
+function generatePassword() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  let password = "";
+  for (let i = 0; i < 10; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
+}
+
 const emptyForm = {
   name: "",
   email: "",
@@ -21,6 +42,7 @@ function UsersPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [createdPassword, setCreatedPassword] = useState(null);
 
   useEffect(() => {
     loadUsers();
@@ -108,16 +130,29 @@ function UsersPage() {
       if (editingId) {
         await updateUser(editingId, payload);
         alert("Petugas berhasil diupdate.");
+        await loadUsers();
+        closeForm();
       } else {
-        await createUser(payload);
-        alert("Petugas berhasil ditambahkan.");
-      }
+        // Buat akun Auth pakai secondary app agar session admin tidak terganggu
+        const tempPassword = generatePassword();
+        const secondaryAuth = getSecondaryAuth();
+        await createUserWithEmailAndPassword(secondaryAuth, payload.email, tempPassword);
+        await secondaryAuth.signOut();
 
-      await loadUsers();
-      closeForm();
+        await createUser(payload);
+        await loadUsers();
+        closeForm();
+
+        // Tampilkan password sementara ke admin
+        setCreatedPassword({ name: payload.name, email: payload.email, password: tempPassword });
+      }
     } catch (error) {
       console.error(error);
-      alert("Gagal menyimpan petugas ke Firebase.");
+      if (error.code === "auth/email-already-in-use") {
+        alert("Email sudah terdaftar di sistem login. Gunakan email lain.");
+      } else {
+        alert("Gagal menyimpan petugas ke Firebase.");
+      }
     }
   }
 
@@ -317,6 +352,51 @@ function UsersPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {createdPassword && (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <div className="modal-header">
+              <h3>Akun Berhasil Dibuat</h3>
+            </div>
+            <div style={{ padding: "16px 0" }}>
+              <p>Berikan informasi login berikut kepada petugas:</p>
+              <br />
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: "6px 0", fontWeight: "600", width: "120px" }}>Nama</td>
+                    <td>{createdPassword.name}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: "6px 0", fontWeight: "600" }}>Email</td>
+                    <td>{createdPassword.email}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: "6px 0", fontWeight: "600" }}>Password</td>
+                    <td>
+                      <strong style={{ fontSize: "18px", letterSpacing: "2px", color: "#2563eb" }}>
+                        {createdPassword.password}
+                      </strong>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <br />
+              <p style={{ color: "#dc2626", fontSize: "13px" }}>
+                ⚠️ Catat password ini sekarang. Password tidak akan ditampilkan lagi.
+              </p>
+            </div>
+            <div className="modal-actions">
+              <button
+                className="primary-button"
+                onClick={() => setCreatedPassword(null)}
+              >
+                Sudah Dicatat, Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}
